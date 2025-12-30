@@ -1,0 +1,16 @@
+{
+  "leagues": [
+    {
+      "id": "your_league_id_here",
+      "name": "My League Name",
+      "season": 2024,
+      "notes": "Optional notes about this league"
+    },
+    {
+      "id": "another_league_id",
+      "name": "Another League",
+      "season": 2024,
+      "notes": ""
+    }
+  ]
+}

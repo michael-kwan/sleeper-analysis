@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 
 from sleeper_analytics.clients.sleeper import LeagueContext, SleeperClient
+from sleeper_analytics.models.awards import SeasonAwardsReport, WeeklyAward
 from sleeper_analytics.models.matchup import (
     Matchup,
     MatchupTeam,
@@ -366,3 +367,106 @@ class MatchupService:
             "ties": ties,
             "matchups": matchups_history,
         }
+
+    async def get_weekly_high_low(self, week: int) -> WeeklyAward:
+        """
+        Find the highest and lowest scorers for a specific week.
+
+        Args:
+            week: Week number
+
+        Returns:
+            WeeklyAward with high and low scorers
+        """
+        matchups = await self.get_weekly_matchups(week)
+
+        if not matchups:
+            raise ValueError(f"No matchups found for week {week}")
+
+        # Collect all team scores
+        all_scores: list[tuple[int, str, float]] = []
+        for matchup in matchups:
+            all_scores.append((
+                matchup.team1.roster_id,
+                matchup.team1.team_name,
+                matchup.team1.points
+            ))
+            all_scores.append((
+                matchup.team2.roster_id,
+                matchup.team2.team_name,
+                matchup.team2.points
+            ))
+
+        # Sort by points
+        all_scores.sort(key=lambda x: x[2])
+
+        # Lowest scorer
+        low_roster_id, low_team, low_score = all_scores[0]
+
+        # Highest scorer
+        high_roster_id, high_team, high_score = all_scores[-1]
+
+        return WeeklyAward(
+            week=week,
+            high_scorer_roster_id=high_roster_id,
+            high_scorer=high_team,
+            high_score=high_score,
+            low_scorer_roster_id=low_roster_id,
+            low_scorer=low_team,
+            low_score=low_score,
+        )
+
+    async def get_season_awards(self, weeks: int = 17) -> SeasonAwardsReport:
+        """
+        Get season-long awards summary with payout tracking.
+
+        Args:
+            weeks: Number of weeks to analyze
+
+        Returns:
+            SeasonAwardsReport with all weekly awards and payout calculations
+        """
+        # Fetch all weekly awards concurrently
+        import asyncio
+
+        tasks = [self.get_weekly_high_low(week) for week in range(1, weeks + 1)]
+        weekly_awards = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Filter out any exceptions (weeks with no matchups)
+        valid_awards = [
+            award for award in weekly_awards
+            if isinstance(award, WeeklyAward)
+        ]
+
+        # Count high and low score occurrences
+        high_score_counts: dict[str, int] = {}
+        low_score_counts: dict[str, int] = {}
+
+        for award in valid_awards:
+            high_score_counts[award.high_scorer] = (
+                high_score_counts.get(award.high_scorer, 0) + 1
+            )
+            low_score_counts[award.low_scorer] = (
+                low_score_counts.get(award.low_scorer, 0) + 1
+            )
+
+        # Calculate net payouts (high scorers get $5, low scorers pay $5)
+        payout_by_team: dict[str, float] = {}
+
+        for team_name in set(list(high_score_counts.keys()) + list(low_score_counts.keys())):
+            high_count = high_score_counts.get(team_name, 0)
+            low_count = low_score_counts.get(team_name, 0)
+            net_payout = (high_count * 5.0) - (low_count * 5.0)
+            payout_by_team[team_name] = net_payout
+
+        return SeasonAwardsReport(
+            league_id=self.ctx.league_id,
+            league_name=self.ctx.league_name,
+            weeks_analyzed=len(valid_awards),
+            weekly_awards=valid_awards,
+            high_score_leaders=high_score_counts,
+            low_score_leaders=low_score_counts,
+            total_payout_high=sum(high_score_counts.values()) * 5.0,
+            total_payout_low=sum(low_score_counts.values()) * 5.0,
+            payout_by_team=payout_by_team,
+        )

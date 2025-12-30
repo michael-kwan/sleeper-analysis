@@ -19,6 +19,21 @@ A FastAPI-based analytics platform for Sleeper fantasy football leagues featurin
 - **NFL Stats**: nfl-data-py
 - **Visualization**: Plotly
 
+## Prerequisites
+
+This project uses [uv](https://github.com/astral-sh/uv) as the package manager. Install it first:
+
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or with Homebrew
+brew install uv
+
+# Or with pip
+pip install uv
+```
+
 ## Installation
 
 ```bash
@@ -30,6 +45,10 @@ uv sync
 
 # Or with dev dependencies
 uv sync --dev
+
+# Configure your leagues (optional)
+cp leagues.json.example leagues.json
+# Edit leagues.json with your league IDs
 ```
 
 ## Running the API

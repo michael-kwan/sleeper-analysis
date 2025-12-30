@@ -1,5 +1,11 @@
 """Pydantic models and schemas."""
 
+from sleeper_analytics.models.awards import SeasonAwardsReport, WeeklyAward
+from sleeper_analytics.models.benchwarmer import (
+    BenchwarmerReport,
+    BenchwarmerWeek,
+    LeagueBenchwarmerReport,
+)
 from sleeper_analytics.models.league import (
     League,
     LeagueScoringSettings,
@@ -32,6 +38,13 @@ from sleeper_analytics.models.transaction import (
 )
 
 __all__ = [
+    # Awards
+    "SeasonAwardsReport",
+    "WeeklyAward",
+    # Benchwarmer
+    "BenchwarmerReport",
+    "BenchwarmerWeek",
+    "LeagueBenchwarmerReport",
     # League
     "League",
     "LeagueScoringSettings",

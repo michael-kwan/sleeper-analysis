@@ -23,6 +23,20 @@ class EfficiencyService:
     - Track bench points over time
     """
 
+    # Position eligibility for each roster slot type
+    # Ensures QBs cannot fill FLEX, only SUPER_FLEX
+    SLOT_ELIGIBILITY = {
+        "QB": ["QB"],
+        "RB": ["RB"],
+        "WR": ["WR"],
+        "TE": ["TE"],
+        "K": ["K"],
+        "DEF": ["DEF"],
+        "FLEX": ["RB", "WR", "TE"],  # QB NOT allowed
+        "SUPER_FLEX": ["QB", "RB", "WR", "TE"],  # QB allowed
+        "REC_FLEX": ["WR", "TE"],  # QB NOT allowed
+    }
+
     def __init__(self, client: SleeperClient, context: LeagueContext):
         self.client = client
         self.ctx = context
@@ -129,41 +143,22 @@ class EfficiencyService:
             if pos in ("BN", "IR"):
                 continue
 
-            if pos == "FLEX":
-                # FLEX can be RB, WR, or TE
-                flex_candidates = []
-                for flex_pos in ["RB", "WR", "TE"]:
-                    for p in positions.get(flex_pos, []):
-                        if p["player_id"] not in used_players:
-                            flex_candidates.append(p)
-                flex_candidates.sort(key=lambda x: x["points"], reverse=True)
-                if flex_candidates:
-                    optimal_points += flex_candidates[0]["points"]
-                    used_players.add(flex_candidates[0]["player_id"])
+            if pos in ("FLEX", "SUPER_FLEX", "REC_FLEX"):
+                # Get eligible positions for this slot
+                eligible_positions = self.SLOT_ELIGIBILITY.get(pos, [])
 
-            elif pos == "SUPER_FLEX":
-                # SUPER_FLEX can be QB, RB, WR, or TE
-                sf_candidates = []
-                for sf_pos in ["QB", "RB", "WR", "TE"]:
-                    for p in positions.get(sf_pos, []):
+                # Find all eligible candidates
+                candidates = []
+                for eligible_pos in eligible_positions:
+                    for p in positions.get(eligible_pos, []):
                         if p["player_id"] not in used_players:
-                            sf_candidates.append(p)
-                sf_candidates.sort(key=lambda x: x["points"], reverse=True)
-                if sf_candidates:
-                    optimal_points += sf_candidates[0]["points"]
-                    used_players.add(sf_candidates[0]["player_id"])
+                            candidates.append(p)
 
-            elif pos == "REC_FLEX":
-                # REC_FLEX can be WR or TE
-                rf_candidates = []
-                for rf_pos in ["WR", "TE"]:
-                    for p in positions.get(rf_pos, []):
-                        if p["player_id"] not in used_players:
-                            rf_candidates.append(p)
-                rf_candidates.sort(key=lambda x: x["points"], reverse=True)
-                if rf_candidates:
-                    optimal_points += rf_candidates[0]["points"]
-                    used_players.add(rf_candidates[0]["player_id"])
+                # Sort by points and take the best
+                candidates.sort(key=lambda x: x["points"], reverse=True)
+                if candidates:
+                    optimal_points += candidates[0]["points"]
+                    used_players.add(candidates[0]["player_id"])
 
             else:
                 # Standard position
