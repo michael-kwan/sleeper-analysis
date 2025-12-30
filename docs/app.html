@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleeper Analytics - League Report</title>
+
+    <!-- PyScript -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: white;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            margin: 20px 0;
+        }
+
+        .loading h2 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 25px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .section h2 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #667eea;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+            padding-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        th {
+            background: rgba(102, 126, 234, 0.2);
+            font-weight: 600;
+            color: #667eea;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .positive {
+            color: #4ade80;
+        }
+
+        .negative {
+            color: #f87171;
+        }
+
+        .error {
+            background: rgba(248, 113, 113, 0.1);
+            border: 1px solid #f87171;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .error h2 {
+            color: #f87171;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="league-name">Loading...</h1>
+            <p id="league-info">Fetching league information...</p>
+        </div>
+
+        <div class="loading" id="loading">
+            <h2>🏈 Analyzing Your League...</h2>
+            <div class="spinner"></div>
+            <p id="status">Initializing Python environment...</p>
+        </div>
+
+        <div id="content" style="display: none;">
+            <!-- Content will be generated by PyScript -->
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <h2>⚠️ Error</h2>
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <script type="py" config='{"packages": ["httpx"]}'>
+import asyncio
+import json
+from js import document, URLSearchParams, window
+from pyodide.http import pyfetch
+
+# Get league ID from URL
+params = URLSearchParams.new(window.location.search)
+league_id = params.get('id')
+
+if not league_id:
+    document.getElementById('error').style.display = 'block'
+    document.getElementById('error-message').textContent = 'No league ID provided. Please go back and enter a league ID.'
+    document.getElementById('loading').style.display = 'none'
+else:
+    async def fetch_json(url):
+        """Fetch JSON from URL"""
+        response = await pyfetch(url)
+        return await response.json()
+
+    async def update_status(message):
+        """Update loading status"""
+        document.getElementById('status').textContent = message
+
+    async def show_error(message):
+        """Show error message"""
+        document.getElementById('loading').style.display = 'none'
+        document.getElementById('error').style.display = 'block'
+        document.getElementById('error-message').textContent = message
+
+    async def generate_report():
+        """Generate the analytics report"""
+        try:
+            await update_status('📊 Fetching league information...')
+
+            # Fetch league data
+            league = await fetch_json(f'https://api.sleeper.app/v1/league/{league_id}')
+            rosters = await fetch_json(f'https://api.sleeper.app/v1/league/{league_id}/rosters')
+            users = await fetch_json(f'https://api.sleeper.app/v1/league/{league_id}/users')
+
+            # Update header
+            document.getElementById('league-name').textContent = league['name']
+            document.getElementById('league-info').textContent = f"Season {league['season']} • {len(rosters)} Teams"
+
+            await update_status('🏈 Fetching matchup data...')
+
+            # Fetch matchups for all weeks (1-14)
+            matchups_by_week = {}
+            for week in range(1, 15):
+                matchups = await fetch_json(f'https://api.sleeper.app/v1/league/{league_id}/matchups/{week}')
+                matchups_by_week[week] = matchups
+
+            await update_status('🧮 Calculating standings...')
+
+            # Calculate standings
+            team_records = {}
+            for roster in rosters:
+                roster_id = roster['roster_id']
+                team_records[roster_id] = {
+                    'roster_id': roster_id,
+                    'wins': 0,
+                    'losses': 0,
+                    'points_for': 0,
+                    'points_against': 0
+                }
+
+            # Process matchups
+            for week, matchups in matchups_by_week.items():
+                matchup_dict = {}
+                for m in matchups:
+                    matchup_id = m.get('matchup_id')
+                    if matchup_id:
+                        if matchup_id not in matchup_dict:
+                            matchup_dict[matchup_id] = []
+                        matchup_dict[matchup_id].append(m)
+
+                for matchup_id, teams in matchup_dict.items():
+                    if len(teams) == 2:
+                        team1, team2 = teams
+                        pts1 = team1.get('points', 0) or 0
+                        pts2 = team2.get('points', 0) or 0
+
+                        team_records[team1['roster_id']]['points_for'] += pts1
+                        team_records[team1['roster_id']]['points_against'] += pts2
+                        team_records[team2['roster_id']]['points_for'] += pts2
+                        team_records[team2['roster_id']]['points_against'] += pts1
+
+                        if pts1 > pts2:
+                            team_records[team1['roster_id']]['wins'] += 1
+                            team_records[team2['roster_id']]['losses'] += 1
+                        elif pts2 > pts1:
+                            team_records[team2['roster_id']]['wins'] += 1
+                            team_records[team1['roster_id']]['losses'] += 1
+
+            # Create user lookup
+            user_lookup = {u['user_id']: u for u in users}
+            roster_to_user = {r['roster_id']: r['owner_id'] for r in rosters}
+
+            # Sort standings
+            standings = sorted(team_records.values(),
+                             key=lambda x: (x['wins'], x['points_for']),
+                             reverse=True)
+
+            await update_status('📝 Generating report...')
+
+            # Build HTML content
+            content_html = '<div class="stats-grid">'
+            content_html += f'<div class="stat-card"><h3>Teams</h3><div class="value">{len(rosters)}</div></div>'
+            content_html += f'<div class="stat-card"><h3>Weeks Played</h3><div class="value">14</div></div>'
+            content_html += f'<div class="stat-card"><h3>Total Matchups</h3><div class="value">{sum(len(m) // 2 for m in matchups_by_week.values())}</div></div>'
+            content_html += '</div>'
+
+            # Standings table
+            content_html += '<div class="section"><h2>🏆 League Standings</h2><table>'
+            content_html += '<thead><tr><th>Rank</th><th>Team</th><th>Record</th><th>PF</th><th>PA</th></tr></thead><tbody>'
+
+            for idx, team in enumerate(standings, 1):
+                user_id = roster_to_user.get(team['roster_id'])
+                user = user_lookup.get(user_id, {})
+                team_name = user.get('metadata', {}).get('team_name') or user.get('display_name', f"Team {team['roster_id']}")
+
+                content_html += f'<tr>'
+                content_html += f'<td>{idx}</td>'
+                content_html += f'<td>{team_name}</td>'
+                content_html += f'<td>{team["wins"]}-{team["losses"]}</td>'
+                content_html += f'<td>{team["points_for"]:.2f}</td>'
+                content_html += f'<td>{team["points_against"]:.2f}</td>'
+                content_html += f'</tr>'
+
+            content_html += '</tbody></table></div>'
+
+            # Set content
+            document.getElementById('content').innerHTML = content_html
+            document.getElementById('content').style.display = 'block'
+            document.getElementById('loading').style.display = 'none'
+
+        except Exception as e:
+            await show_error(f'Failed to generate report: {str(e)}')
+
+    # Run the report generation
+    asyncio.ensure_future(generate_report())
+    </script>
+</body>
+</html>
