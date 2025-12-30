@@ -6,6 +6,18 @@ from sleeper_analytics.models.benchwarmer import (
     BenchwarmerWeek,
     LeagueBenchwarmerReport,
 )
+from sleeper_analytics.models.faab import (
+    LeagueFAABReport,
+    OwnerFAABPerformance,
+    PlayerLifecycle,
+    PlayerOwnershipPeriod,
+)
+from sleeper_analytics.models.luck import (
+    LeagueLuckReport,
+    LuckReport,
+    StrengthOfSchedule,
+    WeeklyLuckAnalysis,
+)
 from sleeper_analytics.models.league import (
     League,
     LeagueScoringSettings,
@@ -45,6 +57,16 @@ __all__ = [
     "BenchwarmerReport",
     "BenchwarmerWeek",
     "LeagueBenchwarmerReport",
+    # FAAB
+    "LeagueFAABReport",
+    "OwnerFAABPerformance",
+    "PlayerLifecycle",
+    "PlayerOwnershipPeriod",
+    # Luck
+    "LeagueLuckReport",
+    "LuckReport",
+    "StrengthOfSchedule",
+    "WeeklyLuckAnalysis",
     # League
     "League",
     "LeagueScoringSettings",
