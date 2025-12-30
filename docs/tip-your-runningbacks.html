@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>tip your runningbacks - Analytics Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            padding: 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(59, 130, 246, 0.3);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #fff, #e0e7ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: #e0e7ff;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #60a5fa;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #94a3b8;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+        }
+
+        .section h2 {
+            color: #60a5fa;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-bottom: 2px solid rgba(96, 165, 250, 0.3);
+            padding-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th {
+            background: rgba(96, 165, 250, 0.2);
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #60a5fa;
+            border-bottom: 2px solid rgba(96, 165, 250, 0.3);
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .highlight {
+            color: #34d399;
+            font-weight: bold;
+        }
+
+        .lowlight {
+            color: #f87171;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+            color: #64748b;
+            font-size: 0.9em;
+        }
+
+        .emoji {
+            font-size: 1.3em;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><span class="emoji">🏈</span>tip your runningbacks</h1>
+            <div class="subtitle">Analytics Report - Weeks 1-14 | 12 Teams</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">12</div>
+                <div class="stat-label">Teams</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">14</div>
+                <div class="stat-label">Weeks Analyzed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">$0</div>
+                <div class="stat-label">Total FAAB Spent</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">14</div>
+                <div class="stat-label">Weeks with Data</div>
+            </div>
+        </div>
+
+        <!-- Standings -->
+        <div class="section">
+            <h2><span class="emoji">🏆</span>Standings</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Team</th>
+                        <th>Record</th>
+                        <th>Points For</th>
+                        <th>Points Against</th>
+                        <th>Avg Points</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>1</td>
+                        <td><strong>chatgpt drafted this team</strong></td>
+                        <td>10-4-0</td>
+                        <td>1419.34</td>
+                        <td>1248.3</td>
+                        <td>101.38</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2</td>
+                        <td><strong>Physically Unable to Lose</strong></td>
+                        <td>9-5-0</td>
+                        <td>1356.3</td>
+                        <td>1250.64</td>
+                        <td>96.88</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>3</td>
+                        <td><strong>orange county, let's rice</strong></td>
+                        <td>8-6-0</td>
+                        <td>1500.86</td>
+                        <td>1324.02</td>
+                        <td>107.2</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>4</td>
+                        <td><strong>another dub for the ogs</strong></td>
+                        <td>8-6-0</td>
+                        <td>1466.7</td>
+                        <td>1305.92</td>
+                        <td>104.76</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>5</td>
+                        <td><strong>🐻🧸</strong></td>
+                        <td>8-6-0</td>
+                        <td>1290.0</td>
+                        <td>1341.96</td>
+                        <td>92.14</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>6</td>
+                        <td><strong>do you speak saquondese?</strong></td>
+                        <td>7-7-0</td>
+                        <td>1479.64</td>
+                        <td>1404.42</td>
+                        <td>105.69</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>7</td>
+                        <td><strong>Taylor Swift-Kelce</strong></td>
+                        <td>7-7-0</td>
+                        <td>1351.0</td>
+                        <td>1344.2</td>
+                        <td>96.5</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>8</td>
+                        <td><strong>Field Deez Nuts </strong></td>
+                        <td>7-7-0</td>
+                        <td>1285.0</td>
+                        <td>1319.04</td>
+                        <td>91.79</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>9</td>
+                        <td><strong>maye i digg in your tets</strong></td>
+                        <td>7-7-0</td>
+                        <td>1186.7</td>
+                        <td>1280.12</td>
+                        <td>84.76</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>10</td>
+                        <td><strong>Sucky Irving </strong></td>
+                        <td>5-9-0</td>
+                        <td>1306.24</td>
+                        <td>1502.7</td>
+                        <td>93.3</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>11</td>
+                        <td><strong>the tortured punters dept</strong></td>
+                        <td>4-10-0</td>
+                        <td>1248.28</td>
+                        <td>1416.38</td>
+                        <td>89.16</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>12</td>
+                        <td><strong>Baby back gibbs</strong></td>
+                        <td>4-10-0</td>
+                        <td>1222.18</td>
+                        <td>1374.54</td>
+                        <td>87.3</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Awards -->
+        <div class="section">
+            <h2><span class="emoji">🎖️</span>Weekly Awards ($5/week)</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value highlight">$70.0</div>
+                    <div class="stat-label">High Scorer Payouts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value lowlight">$70.0</div>
+                    <div class="stat-label">Low Scorer Fees</div>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Team</th>
+                        <th>High Scores</th>
+                        <th>Low Scores</th>
+                        <th>Net Payout</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>Baby back gibbs</strong></td>
+                        <td class="highlight">1</td>
+                        <td class="lowlight">3</td>
+                        <td class="lowlight">$-10</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Field Deez Nuts </strong></td>
+                        <td class="highlight">1</td>
+                        <td class="lowlight">1</td>
+                        <td class="lowlight">$0</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Physically Unable to Lose</strong></td>
+                        <td class="highlight">0</td>
+                        <td class="lowlight">1</td>
+                        <td class="lowlight">$-5</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Sucky Irving </strong></td>
+                        <td class="highlight">1</td>
+                        <td class="lowlight">1</td>
+                        <td class="lowlight">$0</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Taylor Swift-Kelce</strong></td>
+                        <td class="highlight">2</td>
+                        <td class="lowlight">1</td>
+                        <td class="highlight">$5</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>chatgpt drafted this team</strong></td>
+                        <td class="highlight">2</td>
+                        <td class="lowlight">0</td>
+                        <td class="highlight">$10</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>do you speak saquondese?</strong></td>
+                        <td class="highlight">3</td>
+                        <td class="lowlight">0</td>
+                        <td class="highlight">$15</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>maye i digg in your tets</strong></td>
+                        <td class="highlight">0</td>
+                        <td class="lowlight">2</td>
+                        <td class="lowlight">$-10</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>orange county, let's rice</strong></td>
+                        <td class="highlight">1</td>
+                        <td class="lowlight">0</td>
+                        <td class="highlight">$5</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>the tortured punters dept</strong></td>
+                        <td class="highlight">1</td>
+                        <td class="lowlight">2</td>
+                        <td class="lowlight">$-5</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>🐻🧸</strong></td>
+                        <td class="highlight">2</td>
+                        <td class="lowlight">3</td>
+                        <td class="lowlight">$-5</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Benchwarmers -->
+        <div class="section">
+            <h2><span class="emoji">💺</span>Benchwarmer Analysis</h2>
+            <p><strong>Champion:</strong> <span class="highlight">maye i digg in your tets</span> (584.76 points on bench)</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Team</th>
+                        <th>Total Bench Points</th>
+                        <th>Avg/Week</th>
+                        <th>Worst Benching</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>1</td>
+                        <td><strong>maye i digg in your tets</strong></td>
+                        <td class="lowlight">584.76</td>
+                        <td>41.77</td>
+                        <td>Dak Prescott (30.96 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2</td>
+                        <td><strong>🐻🧸</strong></td>
+                        <td class="lowlight">530.02</td>
+                        <td>37.86</td>
+                        <td>Blake Corum (25.6 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>3</td>
+                        <td><strong>Field Deez Nuts </strong></td>
+                        <td class="lowlight">497.4</td>
+                        <td>35.53</td>
+                        <td>Jaxson Dart (28.42 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>4</td>
+                        <td><strong>Taylor Swift-Kelce</strong></td>
+                        <td class="lowlight">479.38</td>
+                        <td>34.24</td>
+                        <td>Kenneth Gainwell (28.4 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>5</td>
+                        <td><strong>chatgpt drafted this team</strong></td>
+                        <td class="lowlight">442.32</td>
+                        <td>31.59</td>
+                        <td>Jordan Love (28.3 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>6</td>
+                        <td><strong>the tortured punters dept</strong></td>
+                        <td class="lowlight">432.02</td>
+                        <td>30.86</td>
+                        <td>Mark Andrews (24.1 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>7</td>
+                        <td><strong>Baby back gibbs</strong></td>
+                        <td class="lowlight">431.44</td>
+                        <td>30.82</td>
+                        <td>Woody Marks (25.9 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>8</td>
+                        <td><strong>do you speak saquondese?</strong></td>
+                        <td class="lowlight">415.36</td>
+                        <td>29.67</td>
+                        <td>Travis Hunter (20.1 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>9</td>
+                        <td><strong>another dub for the ogs</strong></td>
+                        <td class="lowlight">387.66</td>
+                        <td>27.69</td>
+                        <td>Justin Herbert (27.92 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>10</td>
+                        <td><strong>Sucky Irving </strong></td>
+                        <td class="lowlight">352.86</td>
+                        <td>25.2</td>
+                        <td>Sean Tucker (33.0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>11</td>
+                        <td><strong>Physically Unable to Lose</strong></td>
+                        <td class="lowlight">341.1</td>
+                        <td>24.36</td>
+                        <td>Aaron Rodgers (25.66 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>12</td>
+                        <td><strong>orange county, let's rice</strong></td>
+                        <td class="lowlight">244.02</td>
+                        <td>17.43</td>
+                        <td>Colston Loveland (26.8 pts)</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Luck Analysis -->
+        <div class="section">
+            <h2><span class="emoji">🍀</span>Luck Analysis</h2>
+            <p><strong>Luckiest:</strong> <span class="highlight">maye i digg in your tets</span> (+4.0 wins)</p>
+            <p><strong>Unluckiest:</strong> <span class="lowlight">the tortured punters dept</span> (-3.0 wins)</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Team</th>
+                        <th>Actual Record</th>
+                        <th>Expected Record</th>
+                        <th>Luck Score</th>
+                        <th>Lucky Wins</th>
+                        <th>Unlucky Losses</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>maye i digg in your tets</strong></td>
+                        <td>7-7-0</td>
+                        <td>3-11-0</td>
+                        <td class="highlight">+4.0</td>
+                        <td>4</td>
+                        <td>0</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Field Deez Nuts </strong></td>
+                        <td>7-7-0</td>
+                        <td>4-10-0</td>
+                        <td class="highlight">+3.0</td>
+                        <td>3</td>
+                        <td>0</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>chatgpt drafted this team</strong></td>
+                        <td>10-4-0</td>
+                        <td>8-6-0</td>
+                        <td class="highlight">+2.0</td>
+                        <td>3</td>
+                        <td>1</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Baby back gibbs</strong></td>
+                        <td>4-10-0</td>
+                        <td>3-11-0</td>
+                        <td class="highlight">+1.0</td>
+                        <td>1</td>
+                        <td>0</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Physically Unable to Lose</strong></td>
+                        <td>9-5-0</td>
+                        <td>8-6-0</td>
+                        <td class="highlight">+1.0</td>
+                        <td>2</td>
+                        <td>1</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>🐻🧸</strong></td>
+                        <td>8-6-0</td>
+                        <td>8-6-0</td>
+                        <td class="">+0.0</td>
+                        <td>1</td>
+                        <td>1</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Taylor Swift-Kelce</strong></td>
+                        <td>7-7-0</td>
+                        <td>7-7-0</td>
+                        <td class="">+0.0</td>
+                        <td>1</td>
+                        <td>1</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Sucky Irving </strong></td>
+                        <td>5-9-0</td>
+                        <td>6-8-0</td>
+                        <td class="lowlight">-1.0</td>
+                        <td>1</td>
+                        <td>2</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>do you speak saquondese?</strong></td>
+                        <td>7-7-0</td>
+                        <td>9-5-0</td>
+                        <td class="lowlight">-2.0</td>
+                        <td>1</td>
+                        <td>3</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>another dub for the ogs</strong></td>
+                        <td>8-6-0</td>
+                        <td>10-4-0</td>
+                        <td class="lowlight">-2.0</td>
+                        <td>0</td>
+                        <td>2</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>the tortured punters dept</strong></td>
+                        <td>4-10-0</td>
+                        <td>7-7-0</td>
+                        <td class="lowlight">-3.0</td>
+                        <td>1</td>
+                        <td>4</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>orange county, let's rice</strong></td>
+                        <td>8-6-0</td>
+                        <td>11-3-0</td>
+                        <td class="lowlight">-3.0</td>
+                        <td>1</td>
+                        <td>4</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+
+        <!-- FAAB Analysis -->
+        <div class="section">
+            <h2><span class="emoji">💰</span>FAAB Efficiency</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Team</th>
+                        <th>FAAB Spent</th>
+                        <th>FAAB Remaining</th>
+                        <th>Points Gained</th>
+                        <th>Avg ROI</th>
+                        <th>Best Pickup</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>1</td>
+                        <td><strong>the tortured punters dept</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2</td>
+                        <td><strong>orange county, let's rice</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>3</td>
+                        <td><strong>🐻🧸</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>4</td>
+                        <td><strong>Field Deez Nuts </strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>5</td>
+                        <td><strong>Baby back gibbs</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>6</td>
+                        <td><strong>maye i digg in your tets</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>7</td>
+                        <td><strong>chatgpt drafted this team</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>8</td>
+                        <td><strong>Sucky Irving </strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>9</td>
+                        <td><strong>Taylor Swift-Kelce</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>10</td>
+                        <td><strong>Physically Unable to Lose</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>11</td>
+                        <td><strong>do you speak saquondese?</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>12</td>
+                        <td><strong>another dub for the ogs</strong></td>
+                        <td>$0</td>
+                        <td>$100</td>
+                        <td>0.0</td>
+                        <td class="highlight">0.00</td>
+                        <td>N/A (0 pts)</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            <p>Generated with <a href="https://github.com/anthropics/claude-code" style="color: #60a5fa;">Claude Code</a></p>
+            <p>Sleeper Analytics | tip your runningbacks</p>
+        </div>
+    </div>
+</body>
+</html>
