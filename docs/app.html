@@ -236,11 +236,17 @@
         }
 
         async function fetchAPI(endpoint) {
-            const response = await fetch(`${API_BASE}${endpoint}`);
-            if (!response.ok) {
-                throw new Error(`API request failed: ${response.statusText}`);
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`);
+                if (!response.ok) {
+                    const errorText = await response.text().catch(() => response.statusText);
+                    throw new Error(`${endpoint} failed (${response.status}): ${errorText || response.statusText}`);
+                }
+                return response.json();
+            } catch (error) {
+                console.error(`Error fetching ${endpoint}:`, error);
+                throw new Error(`${endpoint}: ${error.message}`);
             }
-            return response.json();
         }
 
         function toggleQBs() {
@@ -267,17 +273,38 @@
                 // Fetch all data concurrently
                 await updateStatus('🔄 Fetching all analytics data...');
 
-                const [standings, awards, benchwarmers, luck, faab, rosterConstruction, draft, lopsidedTrades, transactionActivity] = await Promise.all([
-                    fetchAPI(`/api/matchups/${leagueId}/standings?weeks=14`),
-                    fetchAPI(`/api/awards/${leagueId}/season?weeks=14`),
-                    fetchAPI(`/api/benchwarmer/${leagueId}/league?weeks=14`),
-                    fetchAPI(`/api/luck/${leagueId}/league?weeks=14`),
-                    fetchAPI(`/api/faab/${leagueId}/report?weeks=14`),
-                    fetchAPI(`/api/roster-construction/${leagueId}/league?weeks=14`),
-                    fetchAPI(`/api/draft/${leagueId}/analysis?weeks=14`),
-                    fetchAPI(`/api/trades/${leagueId}/lopsided?weeks=14`),
-                    fetchAPI(`/api/transactions/${leagueId}/activity?weeks=14`)
-                ]);
+                let standings, awards, benchwarmers, luck, faab, rosterConstruction, draft, lopsidedTrades, transactionActivity;
+
+                try {
+                    await updateStatus('📊 Fetching standings...');
+                    standings = await fetchAPI(`/api/matchups/${leagueId}/standings?weeks=14`);
+
+                    await updateStatus('🎖️ Fetching awards...');
+                    awards = await fetchAPI(`/api/awards/${leagueId}/season?weeks=14`);
+
+                    await updateStatus('💺 Fetching benchwarmer analysis...');
+                    benchwarmers = await fetchAPI(`/api/benchwarmer/${leagueId}/league?weeks=14`);
+
+                    await updateStatus('🍀 Fetching luck analysis...');
+                    luck = await fetchAPI(`/api/luck/${leagueId}/league?weeks=14`);
+
+                    await updateStatus('💰 Fetching FAAB analysis...');
+                    faab = await fetchAPI(`/api/faab/${leagueId}/report?weeks=14`);
+
+                    await updateStatus('🏗️ Fetching roster construction...');
+                    rosterConstruction = await fetchAPI(`/api/roster-construction/${leagueId}/league?weeks=14`);
+
+                    await updateStatus('🎯 Fetching draft analysis...');
+                    draft = await fetchAPI(`/api/draft/${leagueId}/analysis?weeks=14`);
+
+                    await updateStatus('🤝 Fetching trade analysis...');
+                    lopsidedTrades = await fetchAPI(`/api/trades/${leagueId}/lopsided?weeks=14`);
+
+                    await updateStatus('📋 Fetching transaction activity...');
+                    transactionActivity = await fetchAPI(`/api/transactions/${leagueId}/activity?weeks=14`);
+                } catch (error) {
+                    throw error; // Re-throw with detailed endpoint info
+                }
 
                 // Combine trades data
                 const trades = {
@@ -461,6 +488,35 @@
             let html = '<div class="section"><h2>🎯 Draft Analysis</h2>';
             html += '<p style="margin-bottom: 15px; color: #94a3b8;">Analyzes draft performance vs expected value. Best picks exceeded expectations, worst picks underperformed.</p>';
 
+            // Calculate expected points and best/worst picks
+            // Collect all picks
+            const allPicks = [];
+            draft.team_grades.forEach(team => {
+                team.picks.forEach(pick => {
+                    allPicks.push({...pick, team_name: team.team_name});
+                });
+            });
+
+            // Calculate expected points using simple power law: points = 200 / pick^0.5
+            allPicks.forEach(pick => {
+                pick.expected_points = 200 / Math.pow(pick.pick_number, 0.5);
+                pick.value_diff = pick.points_scored - pick.expected_points;
+            });
+
+            // Best picks = most above expected
+            const sortedByDiff = [...allPicks].sort((a, b) => b.value_diff - a.value_diff);
+            const bestPicks = sortedByDiff.slice(0, 5);
+
+            // Worst picks = most below expected (only first 60 picks)
+            const earlyPicks = allPicks.filter(p => p.pick_number <= 60);
+            const worstPicks = earlyPicks.sort((a, b) => a.value_diff - b.value_diff).slice(0, 5);
+
+            // Calculate without QBs
+            const nonQBPicks = allPicks.filter(p => p.position !== 'QB');
+            const bestPicksNoQB = [...nonQBPicks].sort((a, b) => b.value_diff - a.value_diff).slice(0, 5);
+            const earlyNonQBPicks = nonQBPicks.filter(p => p.pick_number <= 60);
+            const worstPicksNoQB = earlyNonQBPicks.sort((a, b) => a.value_diff - b.value_diff).slice(0, 5);
+
             // QB Toggle
             html += '<div class="toggle-container">';
             html += '<label><input type="checkbox" id="excludeQBs" onchange="toggleQBs()"><span>Exclude QBs from tables</span></label>';
@@ -469,26 +525,20 @@
             // Draft chart will be inserted here
             html += '<div id="draftChart" style="width: 100%; height: 500px; margin: 20px 0;"></div>';
 
-            // Calculate best/worst picks without QBs
-            const bestPicksNoQB = draft.best_picks ? draft.best_picks.filter(p => p.position !== 'QB').slice(0, 5) : [];
-            const worstPicksNoQB = draft.worst_picks ? draft.worst_picks.filter(p => p.position !== 'QB').slice(0, 5) : [];
-
             // Best Picks - All positions
             html += '<h3>Top 5 Best Picks (Most Above Expected)</h3><table>';
             html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead>';
             html += '<tbody id="bestPicksAll">';
-            if (draft.best_picks) {
-                draft.best_picks.forEach(pick => {
-                    html += `<tr>
-                        <td>${pick.pick_number}</td>
-                        <td>${pick.player_name} (${pick.position})</td>
-                        <td>${pick.team_name}</td>
-                        <td class="positive">${pick.points_scored.toFixed(1)}</td>
-                        <td>${pick.expected_points.toFixed(1)}</td>
-                        <td class="positive">+${pick.value_diff.toFixed(1)}</td>
-                    </tr>`;
-                });
-            }
+            bestPicks.forEach(pick => {
+                html += `<tr>
+                    <td>${pick.pick_number}</td>
+                    <td>${pick.player_name} (${pick.position})</td>
+                    <td>${pick.team_name}</td>
+                    <td class="positive">${pick.points_scored.toFixed(1)}</td>
+                    <td>${pick.expected_points.toFixed(1)}</td>
+                    <td class="positive">+${pick.value_diff.toFixed(1)}</td>
+                </tr>`;
+            });
             html += '</tbody>';
 
             // Best Picks - No QBs
@@ -509,18 +559,16 @@
             html += '<h3>Top 5 Worst Picks (Most Below Expected)</h3><table>';
             html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead>';
             html += '<tbody id="worstPicksAll">';
-            if (draft.worst_picks) {
-                draft.worst_picks.forEach(pick => {
-                    html += `<tr>
-                        <td>${pick.pick_number}</td>
-                        <td>${pick.player_name} (${pick.position})</td>
-                        <td>${pick.team_name}</td>
-                        <td class="negative">${pick.points_scored.toFixed(1)}</td>
-                        <td>${pick.expected_points.toFixed(1)}</td>
-                        <td class="negative">${pick.value_diff.toFixed(1)}</td>
-                    </tr>`;
-                });
-            }
+            worstPicks.forEach(pick => {
+                html += `<tr>
+                    <td>${pick.pick_number}</td>
+                    <td>${pick.player_name} (${pick.position})</td>
+                    <td>${pick.team_name}</td>
+                    <td class="negative">${pick.points_scored.toFixed(1)}</td>
+                    <td>${pick.expected_points.toFixed(1)}</td>
+                    <td class="negative">${pick.value_diff.toFixed(1)}</td>
+                </tr>`;
+            });
             html += '</tbody>';
 
             // Worst Picks - No QBs
@@ -537,31 +585,21 @@
             });
             html += '</tbody></table></div>';
 
-            // Render draft chart
-            setTimeout(() => renderDraftChart(draft), 100);
+            // Render draft chart with calculated picks
+            setTimeout(() => renderDraftChart(draft, allPicks), 100);
 
             return html;
         }
 
-        function renderDraftChart(draft) {
+        function renderDraftChart(draft, allPicks) {
             if (!draft.team_grades || draft.team_grades.length === 0) return;
 
-            // Collect all picks
-            const pickNumbers = [];
-            const actualPoints = [];
-            const positions = [];
-            const playerNames = [];
-            const teamNames = [];
-
-            draft.team_grades.forEach(team => {
-                team.picks.forEach(pick => {
-                    pickNumbers.push(pick.pick_number);
-                    actualPoints.push(pick.points_scored);
-                    positions.push(pick.position);
-                    playerNames.push(pick.player_name);
-                    teamNames.push(team.team_name);
-                });
-            });
+            // Extract data from allPicks
+            const pickNumbers = allPicks.map(p => p.pick_number);
+            const actualPoints = allPicks.map(p => p.points_scored);
+            const positions = allPicks.map(p => p.position);
+            const playerNames = allPicks.map(p => p.player_name);
+            const teamNames = allPicks.map(p => p.team_name);
 
             // Calculate trend line (polynomial fit approximation)
             const trendX = [];
