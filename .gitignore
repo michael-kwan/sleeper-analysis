@@ -12,3 +12,6 @@ wheels/
 # Environment and local config
 .env
 leagues.json
+
+# Local development
+docs/app-local.html
