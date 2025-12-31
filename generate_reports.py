@@ -18,7 +18,9 @@ from sleeper_analytics.services.benchwarmer import BenchwarmerService
 from sleeper_analytics.services.faab import FAABService
 from sleeper_analytics.services.luck_analysis import LuckAnalysisService
 from sleeper_analytics.services.matchups import MatchupService
+from sleeper_analytics.services.nfl_stats import get_nfl_stats_service
 from sleeper_analytics.services.roster_construction import RosterConstructionService
+from sleeper_analytics.services.trades import TransactionService
 
 
 async def generate_league_report(league_id: str, league_name: str, season: int):
@@ -41,11 +43,13 @@ async def generate_league_report(league_id: str, league_name: str, season: int):
         weeks = 14
 
         # Initialize services
+        nfl_stats = get_nfl_stats_service(season)
         matchup_service = MatchupService(client, ctx)
         benchwarmer_service = BenchwarmerService(client, ctx)
         luck_service = LuckAnalysisService(client, ctx)
         faab_service = FAABService(client, ctx)
         roster_construction_service = RosterConstructionService(client, ctx)
+        trades_service = TransactionService(client, ctx, nfl_stats)
 
         # Fetch all data
         print(f"\n📈 Fetching analytics data (weeks 1-{weeks})...\n")
@@ -68,9 +72,12 @@ async def generate_league_report(league_id: str, league_name: str, season: int):
         print("   📊 Fetching roster construction analysis...")
         roster_construction = await roster_construction_service.get_league_roster_construction_report(weeks)
 
+        print("   🤝 Fetching trade analysis...")
+        trades = await trades_service.get_lopsided_trades_report(weeks)
+
         # Generate HTML
         print("\n📝 Generating HTML report...")
-        html = generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_construction, weeks)
+        html = generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_construction, trades, weeks)
 
         # Save to file
         output_dir = Path("docs")
@@ -86,7 +93,7 @@ async def generate_league_report(league_id: str, league_name: str, season: int):
         return output_path
 
 
-def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_construction, weeks):
+def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_construction, trades, weeks):
     """Generate HTML report with all analytics."""
     # Create summary stats
     total_teams = len(ctx.rosters)
@@ -95,6 +102,7 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
     # Generate charts
     roster_construction_chart = generate_roster_construction_chart(roster_construction)
     luck_chart = generate_luck_chart(luck)
+    trades_chart = generate_trades_chart(trades) if trades.total_trades > 0 else None
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -332,7 +340,7 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
         <!-- Benchwarmers -->
         <div class="section">
             <h2><span class="emoji">💺</span>Benchwarmer Analysis</h2>
-            <p><strong>Champion:</strong> <span class="highlight">{benchwarmers.benchwarmer_champion}</span> ({benchwarmers.benchwarmer_champion_points} total unoptimized points)</p>
+            <p><strong>Champion:</strong> <span class="highlight">{benchwarmers.benchwarmer_champion}</span> ({benchwarmers.benchwarmer_champion_points:.2f} total unoptimized points)</p>
             <p style="color: #94a3b8; font-size: 0.9em; margin-top: 10px;">
                 <em>Note: "Total unoptimized points" = sum of all points left on bench when a better player could have started.
                 This measures lineup optimization mistakes, not just bench production.</em>
@@ -352,9 +360,9 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                     <tr>
                         <td>{idx + 1}</td>
                         <td><strong>{team.team_name}</strong></td>
-                        <td class="lowlight">{team.total_bench_points}</td>
-                        <td>{team.avg_bench_points_per_week}</td>
-                        <td>{team.worst_benching_decision.player_name if team.worst_benching_decision else "N/A"} ({team.worst_benching_decision.points if team.worst_benching_decision else 0} pts)</td>
+                        <td class="lowlight">{team.total_bench_points:.2f}</td>
+                        <td>{team.avg_bench_points_per_week:.2f}</td>
+                        <td>{'N/A' if not team.worst_benching_decision else f'{team.worst_benching_decision.player_name} - Week {team.worst_benching_decision.week} ({team.worst_benching_decision.points:.2f} pts)'}</td>
                     </tr>
                     ''' for idx, team in enumerate(sorted(benchwarmers.all_teams, key=lambda x: x.total_bench_points, reverse=True)))}
                 </tbody>
@@ -463,6 +471,40 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                 </tbody>
             </table>
         </div>
+
+        <!-- Trade Analysis -->
+        {'<div class="section">' + f'''
+            <h2><span class="emoji">🤝</span>Trade Analysis</h2>
+            <p><strong>Best Trader:</strong> <span class="highlight">{trades.best_overall_trader}</span> (Net: +{trades.best_overall_trader_net_points:.1f} pts)</p>
+            <p><strong>Worst Trader:</strong> <span class="lowlight">{trades.worst_overall_trader}</span> (Net: {trades.worst_overall_trader_net_points:.1f} pts)</p>
+            <p><strong>Biggest Trade Winner:</strong> {trades.biggest_trade_winner} (+{trades.biggest_trade_winner_differential:.1f} pts)</p>
+            <p><strong>Biggest Trade Loser:</strong> {trades.biggest_trade_loser} (-{trades.biggest_trade_loser_differential:.1f} pts)</p>
+
+            {f'<div style="margin-top: 30px;">{trades_chart}</div>' if trades_chart else ''}
+
+            <table style="margin-top: 30px;">
+                <thead>
+                    <tr>
+                        <th>Week</th>
+                        <th>Winner</th>
+                        <th>Loser</th>
+                        <th>Point Differential</th>
+                        <th>Lopsidedness</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(f"""
+                    <tr>
+                        <td>{trade.week}</td>
+                        <td><strong>{trade.winner}</strong></td>
+                        <td>{trade.loser}</td>
+                        <td class="highlight">+{trade.point_differential:.1f}</td>
+                        <td class="{'lowlight' if trade.lopsidedness_rating == 'Extremely Lopsided' else ''}">{trade.lopsidedness_rating}</td>
+                    </tr>
+                    """ for trade in trades.most_lopsided_trades[:10])}
+                </tbody>
+            </table>
+        ''' + '</div>' if trades.total_trades > 0 else ''}
 
         <div class="footer">
             <p>Generated with <a href="https://github.com/anthropics/claude-code" style="color: #60a5fa;">Claude Code</a></p>
@@ -714,62 +756,111 @@ def generate_index(leagues):
 
 
 def generate_roster_construction_chart(roster_construction):
-    """Generate stacked bar chart for roster construction."""
+    """Generate stacked bar chart for roster construction (sorted by points for)."""
     import plotly.graph_objects as go
 
-    teams = [team.team_name for team in roster_construction.all_teams]
-    draft_pcts = [team.breakdown.draft_percentage for team in roster_construction.all_teams]
-    trade_pcts = [team.breakdown.trade_percentage for team in roster_construction.all_teams]
-    waiver_pcts = [team.breakdown.waiver_percentage for team in roster_construction.all_teams]
-    fa_pcts = [team.breakdown.free_agent_percentage for team in roster_construction.all_teams]
+    # Sort teams by total points (descending)
+    teams_sorted = sorted(roster_construction.all_teams, key=lambda x: x.breakdown.total_points, reverse=True)
+
+    teams = [team.team_name for team in teams_sorted]
+    draft_pts = [team.breakdown.draft_points for team in teams_sorted]
+    trade_pts = [team.breakdown.trade_points for team in teams_sorted]
+    waiver_pts = [team.breakdown.waiver_points for team in teams_sorted]
+    fa_pts = [team.breakdown.free_agent_points for team in teams_sorted]
 
     fig = go.Figure()
 
     fig.add_trace(go.Bar(
         name='Draft',
         x=teams,
-        y=draft_pcts,
-        marker_color='#3b82f6'
+        y=draft_pts,
+        marker_color='#3b82f6',
+        hovertemplate='<b>%{x}</b><br>Draft: %{y:.1f} pts<extra></extra>'
     ))
 
     fig.add_trace(go.Bar(
         name='Trades',
         x=teams,
-        y=trade_pcts,
-        marker_color='#8b5cf6'
+        y=trade_pts,
+        marker_color='#8b5cf6',
+        hovertemplate='<b>%{x}</b><br>Trades: %{y:.1f} pts<extra></extra>'
     ))
 
     fig.add_trace(go.Bar(
         name='Waivers',
         x=teams,
-        y=waiver_pcts,
-        marker_color='#10b981'
+        y=waiver_pts,
+        marker_color='#10b981',
+        hovertemplate='<b>%{x}</b><br>Waivers: %{y:.1f} pts<extra></extra>'
     ))
 
     fig.add_trace(go.Bar(
         name='Free Agents',
         x=teams,
-        y=fa_pcts,
-        marker_color='#f59e0b'
+        y=fa_pts,
+        marker_color='#f59e0b',
+        hovertemplate='<b>%{x}</b><br>Free Agents: %{y:.1f} pts<extra></extra>'
     ))
 
     fig.update_layout(
         barmode='stack',
-        title='Roster Construction: Point Sources by Team',
+        title='Roster Construction: Point Sources by Team (Sorted by Total Points)',
         xaxis_title='Team',
-        yaxis_title='Percentage of Points',
+        yaxis_title='Points',
         plot_bgcolor='rgba(15, 23, 42, 0.8)',
         paper_bgcolor='rgba(15, 23, 42, 0)',
         font=dict(color='#e2e8f0'),
         xaxis=dict(tickangle=-45),
-        height=500
+        height=500,
+        hovermode='x unified'
+    )
+
+    return fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+
+def generate_trades_chart(trades):
+    """Generate bar chart for lopsided trades."""
+    import plotly.graph_objects as go
+
+    if not trades.most_lopsided_trades:
+        return None
+
+    # Take top 10 most lopsided trades
+    top_trades = trades.most_lopsided_trades[:10]
+
+    # Create labels with week and teams
+    labels = [f"Week {t.week}: {t.winner} vs {t.loser}" for t in top_trades]
+    differentials = [t.point_differential for t in top_trades]
+    colors = ['#f87171' if t.lopsidedness_rating == 'Extremely Lopsided'
+              else '#fb923c' if t.lopsidedness_rating == 'Lopsided'
+              else '#fbbf24' for t in top_trades]
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        y=labels,
+        x=differentials,
+        orientation='h',
+        marker_color=colors,
+        hovertemplate='<b>%{y}</b><br>Point Differential: %{x:.1f} pts<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title='Most Lopsided Trades (Point Differential After Trade)',
+        xaxis_title='Point Differential',
+        yaxis_title='',
+        plot_bgcolor='rgba(15, 23, 42, 0.8)',
+        paper_bgcolor='rgba(15, 23, 42, 0)',
+        font=dict(color='#e2e8f0'),
+        height=600,
+        yaxis=dict(autorange='reversed')  # Show most lopsided at top
     )
 
     return fig.to_html(full_html=False, include_plotlyjs='cdn')
 
 
 def generate_luck_chart(luck):
-    """Generate luck vs wins visualization."""
+    """Generate luck vs wins visualization with teams on Y-axis."""
     import plotly.graph_objects as go
 
     # Sort teams by actual wins (descending)
@@ -781,36 +872,48 @@ def generate_luck_chart(luck):
 
     fig = go.Figure()
 
-    # Add actual wins line
+    # Add horizontal lines connecting actual to expected wins for each team
+    for i in range(len(teams)):
+        fig.add_trace(go.Scatter(
+            x=[expected_wins[i], actual_wins[i]],
+            y=[i, i],
+            mode='lines',
+            line=dict(color='#64748b', width=2),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+
+    # Add expected wins markers
     fig.add_trace(go.Scatter(
-        x=list(range(len(teams))),
-        y=actual_wins,
-        mode='lines+markers',
-        name='Actual Wins',
-        line=dict(color='#3b82f6', width=3),
-        marker=dict(size=10)
+        x=expected_wins,
+        y=list(range(len(teams))),
+        mode='markers',
+        name='Expected Wins',
+        marker=dict(size=12, color='#10b981', symbol='diamond'),
+        hovertemplate='<b>%{text}</b><br>Expected: %{x:.1f} wins<extra></extra>',
+        text=teams
     ))
 
-    # Add expected wins line
+    # Add actual wins markers
     fig.add_trace(go.Scatter(
-        x=list(range(len(teams))),
-        y=expected_wins,
-        mode='lines+markers',
-        name='Expected Wins (Luck-Adjusted)',
-        line=dict(color='#10b981', width=3, dash='dash'),
-        marker=dict(size=10)
+        x=actual_wins,
+        y=list(range(len(teams))),
+        mode='markers',
+        name='Actual Wins',
+        marker=dict(size=12, color='#3b82f6', symbol='circle'),
+        hovertemplate='<b>%{text}</b><br>Actual: %{x:.1f} wins<extra></extra>',
+        text=teams
     ))
 
     fig.update_layout(
         title='Actual vs Expected Wins (Sorted by Actual Wins)',
-        xaxis=dict(
+        xaxis=dict(title='Wins'),
+        yaxis=dict(
             tickmode='array',
             tickvals=list(range(len(teams))),
             ticktext=teams,
-            tickangle=-45,
-            title='Team'
+            title=''
         ),
-        yaxis=dict(title='Wins'),
         plot_bgcolor='rgba(15, 23, 42, 0.8)',
         paper_bgcolor='rgba(15, 23, 42, 0)',
         font=dict(color='#e2e8f0'),
