@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sleeper Analytics - League Report</title>
 
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -180,6 +183,20 @@
         .back-link:hover {
             background: rgba(255, 255, 255, 0.15);
         }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chart {
+            width: 100%;
+            height: 500px;
+        }
     </style>
 </head>
 <body>
@@ -279,7 +296,7 @@
                 // Standings
                 html += '<div class="section"><h2>🏆 League Standings</h2><table>';
                 html += '<thead><tr><th>Rank</th><th>Team</th><th>Record</th><th>PF</th><th>PA</th><th>Diff</th></tr></thead><tbody>';
-                standings.standings.forEach((team, idx) => {
+                standings.forEach((team, idx) => {
                     const diff = team.points_for - team.points_against;
                     const diffClass = diff > 0 ? 'positive' : 'negative';
                     html += `<tr>`;
@@ -372,10 +389,213 @@
                 document.getElementById('content').style.display = 'block';
                 document.getElementById('loading').style.display = 'none';
 
+                // Render charts after content is loaded
+                await updateStatus('📊 Rendering charts...');
+                renderStandingsChart(standings);
+                renderWeeklyScoresChart(awards);
+                renderLuckScatterChart(luck);
+                renderFAABChart(faab);
+                renderBenchwarmerChart(benchwarmers);
+
             } catch (error) {
                 console.error('Error generating report:', error);
                 await showError(`Failed to generate report: ${error.message}`);
             }
+        }
+
+        // Chart rendering functions
+        function renderStandingsChart(standings) {
+            const teams = standings.map(s => s.team_name);
+            const pointsFor = standings.map(s => s.points_for);
+            const pointsAgainst = standings.map(s => s.points_against);
+
+            const trace1 = {
+                x: teams,
+                y: pointsFor,
+                name: 'Points For',
+                type: 'bar',
+                marker: { color: '#4ade80' }
+            };
+
+            const trace2 = {
+                x: teams,
+                y: pointsAgainst,
+                name: 'Points Against',
+                type: 'bar',
+                marker: { color: '#f87171' }
+            };
+
+            const layout = {
+                title: 'Points For vs Against',
+                barmode: 'group',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#e0e0e0' },
+                xaxis: { tickangle: -45 },
+                margin: { b: 150 }
+            };
+
+            // Create chart div and render
+            const chartDiv = document.createElement('div');
+            chartDiv.className = 'chart-container';
+            chartDiv.innerHTML = '<div id="standings-chart" class="chart"></div>';
+            document.querySelector('.section:nth-of-type(2)').after(chartDiv);
+
+            Plotly.newPlot('standings-chart', [trace1, trace2], layout, {responsive: true});
+        }
+
+        function renderWeeklyScoresChart(awards) {
+            const weeks = awards.weekly_awards.map(w => w.week);
+            const highScores = awards.weekly_awards.map(w => w.high_score);
+            const lowScores = awards.weekly_awards.map(w => w.low_score);
+
+            const trace1 = {
+                x: weeks,
+                y: highScores,
+                name: 'High Score',
+                type: 'scatter',
+                mode: 'lines+markers',
+                line: { color: '#4ade80', width: 3 },
+                marker: { size: 8 }
+            };
+
+            const trace2 = {
+                x: weeks,
+                y: lowScores,
+                name: 'Low Score',
+                type: 'scatter',
+                mode: 'lines+markers',
+                line: { color: '#f87171', width: 3 },
+                marker: { size: 8 }
+            };
+
+            const layout = {
+                title: 'Weekly High/Low Scores',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#e0e0e0' },
+                xaxis: { title: 'Week' },
+                yaxis: { title: 'Points' }
+            };
+
+            const chartDiv = document.createElement('div');
+            chartDiv.className = 'chart-container';
+            chartDiv.innerHTML = '<div id="weekly-chart" class="chart"></div>';
+            document.querySelector('.section:nth-of-type(3)').after(chartDiv);
+
+            Plotly.newPlot('weekly-chart', [trace1, trace2], layout, {responsive: true});
+        }
+
+        function renderLuckScatterChart(luck) {
+            const teams = luck.team_reports.map(t => t.team_name);
+            const luckScores = luck.team_reports.map(t => t.luck_score);
+            const wins = luck.team_reports.map(t => t.wins);
+
+            const trace = {
+                x: luckScores,
+                y: wins,
+                text: teams,
+                mode: 'markers+text',
+                type: 'scatter',
+                marker: {
+                    size: 12,
+                    color: luckScores,
+                    colorscale: [[0, '#f87171'], [0.5, '#e0e0e0'], [1, '#4ade80']],
+                    showscale: true,
+                    colorbar: { title: 'Luck Score' }
+                },
+                textposition: 'top center'
+            };
+
+            const layout = {
+                title: 'Luck vs Wins',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#e0e0e0' },
+                xaxis: { title: 'Luck Score', zeroline: true },
+                yaxis: { title: 'Wins' },
+                shapes: [{
+                    type: 'line',
+                    x0: 0,
+                    y0: 0,
+                    x1: 0,
+                    y1: 14,
+                    line: { color: '#667eea', width: 2, dash: 'dash' }
+                }]
+            };
+
+            const chartDiv = document.createElement('div');
+            chartDiv.className = 'chart-container';
+            chartDiv.innerHTML = '<div id="luck-chart" class="chart"></div>';
+            document.querySelector('.section:nth-of-type(4)').after(chartDiv);
+
+            Plotly.newPlot('luck-chart', [trace], layout, {responsive: true});
+        }
+
+        function renderFAABChart(faab) {
+            const teams = faab.owner_rankings.map(o => o.owner_name);
+            const roi = faab.owner_rankings.map(o => o.avg_roi);
+            const spent = faab.owner_rankings.map(o => o.total_faab_spent);
+
+            const trace = {
+                x: teams,
+                y: roi,
+                type: 'bar',
+                marker: {
+                    color: roi,
+                    colorscale: [[0, '#f87171'], [0.5, '#667eea'], [1, '#4ade80']],
+                    showscale: false
+                },
+                text: spent.map(s => `$${s}`),
+                textposition: 'outside'
+            };
+
+            const layout = {
+                title: 'FAAB Efficiency (ROI)',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#e0e0e0' },
+                xaxis: { tickangle: -45 },
+                yaxis: { title: 'Average ROI' },
+                margin: { b: 150 }
+            };
+
+            const chartDiv = document.createElement('div');
+            chartDiv.className = 'chart-container';
+            chartDiv.innerHTML = '<div id="faab-chart" class="chart"></div>';
+            document.querySelector('.section:nth-of-type(5)').after(chartDiv);
+
+            Plotly.newPlot('faab-chart', [trace], layout, {responsive: true});
+        }
+
+        function renderBenchwarmerChart(benchwarmers) {
+            const teams = benchwarmers.team_reports.map(t => t.team_name);
+            const benchPoints = benchwarmers.team_reports.map(t => t.total_bench_points);
+
+            const trace = {
+                labels: teams,
+                values: benchPoints,
+                type: 'pie',
+                marker: {
+                    colors: ['#667eea', '#764ba2', '#f87171', '#4ade80', '#fbbf24', '#60a5fa', '#a78bfa', '#fb923c']
+                },
+                textinfo: 'label+percent',
+                hoverinfo: 'label+value'
+            };
+
+            const layout = {
+                title: 'Bench Points Distribution',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#e0e0e0' },
+                showlegend: false
+            };
+
+            const chartDiv = document.createElement('div');
+            chartDiv.className = 'chart-container';
+            chartDiv.innerHTML = '<div id="benchwarmer-chart" class="chart"></div>';
+            document.querySelector('.section:last-of-type').after(chartDiv);
+
+            Plotly.newPlot('benchwarmer-chart', [trace], layout, {responsive: true});
         }
     </script>
 </body>
