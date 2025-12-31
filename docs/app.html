@@ -270,59 +270,135 @@
                 document.getElementById('league-name').textContent = league.name;
                 document.getElementById('league-info').textContent = `Season ${league.season} • ${league.total_rosters} Teams`;
 
-                // Fetch all data concurrently
+                // Fetch all data with individual error handling
                 await updateStatus('🔄 Fetching all analytics data...');
 
+                const errors = [];
                 let standings, awards, benchwarmers, luck, faab, rosterConstruction, draft, lopsidedTrades, transactionActivity;
 
+                // Standings
                 try {
                     await updateStatus('📊 Fetching standings...');
                     standings = await fetchAPI(`/api/matchups/${leagueId}/standings?weeks=14`);
+                } catch (error) {
+                    errors.push({ section: 'Standings', error: error.message });
+                    console.error('Standings error:', error);
+                }
 
+                // Awards
+                try {
                     await updateStatus('🎖️ Fetching awards...');
                     awards = await fetchAPI(`/api/awards/${leagueId}/season?weeks=14`);
+                } catch (error) {
+                    errors.push({ section: 'Awards', error: error.message });
+                    console.error('Awards error:', error);
+                }
 
+                // Benchwarmer
+                try {
                     await updateStatus('💺 Fetching benchwarmer analysis...');
                     benchwarmers = await fetchAPI(`/api/benchwarmer/${leagueId}/league?weeks=14`);
+                } catch (error) {
+                    errors.push({ section: 'Benchwarmer Analysis', error: error.message });
+                    console.error('Benchwarmer error:', error);
+                }
 
+                // Luck
+                try {
                     await updateStatus('🍀 Fetching luck analysis...');
                     luck = await fetchAPI(`/api/luck/${leagueId}/league?weeks=14`);
+                } catch (error) {
+                    errors.push({ section: 'Luck Analysis', error: error.message });
+                    console.error('Luck error:', error);
+                }
 
+                // FAAB
+                try {
                     await updateStatus('💰 Fetching FAAB analysis...');
                     faab = await fetchAPI(`/api/faab/${leagueId}/report?weeks=14`);
+                } catch (error) {
+                    errors.push({ section: 'FAAB Analysis', error: error.message });
+                    console.error('FAAB error:', error);
+                }
 
+                // Roster Construction
+                try {
                     await updateStatus('🏗️ Fetching roster construction...');
                     rosterConstruction = await fetchAPI(`/api/roster-construction/${leagueId}/league?weeks=14`);
+                } catch (error) {
+                    errors.push({ section: 'Roster Construction', error: error.message });
+                    console.error('Roster Construction error:', error);
+                }
 
+                // Draft Analysis
+                try {
                     await updateStatus('🎯 Fetching draft analysis...');
                     draft = await fetchAPI(`/api/draft/${leagueId}/analysis?weeks=14`);
+                } catch (error) {
+                    errors.push({ section: 'Draft Analysis', error: error.message });
+                    console.error('Draft error:', error);
+                }
 
+                // Lopsided Trades
+                try {
                     await updateStatus('🤝 Fetching trade analysis...');
                     lopsidedTrades = await fetchAPI(`/api/trades/${leagueId}/lopsided?weeks=14`);
+                } catch (error) {
+                    errors.push({ section: 'Lopsided Trades', error: error.message });
+                    console.error('Lopsided Trades error:', error);
+                }
 
+                // Transaction Activity
+                try {
                     await updateStatus('📋 Fetching transaction activity...');
                     transactionActivity = await fetchAPI(`/api/transactions/${leagueId}/activity?weeks=14`);
                 } catch (error) {
-                    throw error; // Re-throw with detailed endpoint info
+                    errors.push({ section: 'Transaction Activity', error: error.message });
+                    console.error('Transaction Activity error:', error);
                 }
 
-                // Combine trades data
-                const trades = {
-                    most_lopsided_trades: lopsidedTrades.trades || [],
-                    transaction_activity: transactionActivity.team_activity || []
-                };
+                // Combine trades data (only if both succeeded)
+                let trades = null;
+                if (lopsidedTrades && transactionActivity) {
+                    trades = {
+                        most_lopsided_trades: lopsidedTrades.trades || [],
+                        transaction_activity: transactionActivity.team_activity || []
+                    };
+                }
 
                 await updateStatus('📝 Generating comprehensive report...');
 
-                // Build complete HTML content
-                let html = buildStandingsSection(standings);
-                html += buildAwardsSection(awards);
-                html += buildBenchwarmerSection(benchwarmers);
-                html += buildLuckSection(luck);
-                html += buildFAABSection(faab);
-                html += buildRosterConstructionSection(rosterConstruction);
-                html += buildDraftSection(draft);
-                html += buildTradesSection(trades);
+                // Build complete HTML content (only for successful sections)
+                let html = '';
+
+                try { if (standings) html += buildStandingsSection(standings); }
+                catch (error) { errors.push({ section: 'Standings Rendering', error: error.message }); }
+
+                try { if (awards) html += buildAwardsSection(awards); }
+                catch (error) { errors.push({ section: 'Awards Rendering', error: error.message }); }
+
+                try { if (benchwarmers) html += buildBenchwarmerSection(benchwarmers); }
+                catch (error) { errors.push({ section: 'Benchwarmer Rendering', error: error.message }); }
+
+                try { if (luck) html += buildLuckSection(luck); }
+                catch (error) { errors.push({ section: 'Luck Rendering', error: error.message }); }
+
+                try { if (faab) html += buildFAABSection(faab); }
+                catch (error) { errors.push({ section: 'FAAB Rendering', error: error.message }); }
+
+                try { if (rosterConstruction) html += buildRosterConstructionSection(rosterConstruction); }
+                catch (error) { errors.push({ section: 'Roster Construction Rendering', error: error.message }); }
+
+                try { if (draft) html += buildDraftSection(draft); }
+                catch (error) { errors.push({ section: 'Draft Rendering', error: error.message }); }
+
+                try { if (trades) html += buildTradesSection(trades); }
+                catch (error) { errors.push({ section: 'Trades Rendering', error: error.message }); }
+
+                // Add debug section if there were any errors
+                if (errors.length > 0) {
+                    html += buildDebugSection(errors);
+                }
 
                 // Set content and hide loading
                 document.getElementById('content').innerHTML = html;
@@ -723,6 +799,29 @@
             }
             html += '</tbody></table></div>';
 
+            return html;
+        }
+
+        function buildDebugSection(errors) {
+            let html = '<div class="section" style="margin-top: 40px; border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.05);">';
+            html += '<details style="cursor: pointer;">';
+            html += '<summary style="font-size: 1.2em; font-weight: 600; color: #f59e0b; padding: 10px; user-select: none;">';
+            html += `⚠️ Debug Information (${errors.length} issue${errors.length > 1 ? 's' : ''})`;
+            html += '</summary>';
+            html += '<div style="padding: 20px; color: #e2e8f0;">';
+            html += '<p style="margin-bottom: 15px; color: #94a3b8;">The following sections failed to load or render. This information is for debugging purposes.</p>';
+
+            errors.forEach((err, idx) => {
+                html += '<div style="margin-bottom: 20px; padding: 15px; background: rgba(15, 23, 42, 0.5); border-left: 3px solid #f59e0b; border-radius: 4px;">';
+                html += `<div style="font-weight: 600; margin-bottom: 8px; color: #fbbf24;">${idx + 1}. ${err.section}</div>`;
+                html += `<div style="font-family: monospace; font-size: 0.9em; color: #f87171; white-space: pre-wrap; word-break: break-word;">${err.error}</div>`;
+                html += '</div>';
+            });
+
+            html += '<p style="margin-top: 20px; font-size: 0.9em; color: #64748b;">Tip: Open browser console (F12) for more detailed error logs.</p>';
+            html += '</div>';
+            html += '</details>';
+            html += '</div>';
             return html;
         }
     </script>
