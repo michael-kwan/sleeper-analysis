@@ -371,10 +371,23 @@
             });
             html += '</tbody></table>';
 
+            // Convert API response dicts to payout summary array
+            const payoutSummary = [];
+            for (const [teamName, netPayout] of Object.entries(awards.payout_by_team)) {
+                payoutSummary.push({
+                    team_name: teamName,
+                    high_scorer_count: awards.high_score_leaders[teamName] || 0,
+                    low_scorer_count: awards.low_score_leaders[teamName] || 0,
+                    net_payout: netPayout
+                });
+            }
+            // Sort by net payout descending
+            payoutSummary.sort((a, b) => b.net_payout - a.net_payout);
+
             // Payout summary
             html += '<h3>Season Payout Summary</h3><table>';
             html += '<thead><tr><th>Team</th><th>High Scorer Count</th><th>Low Scorer Count</th><th>Net Payout</th></tr></thead><tbody>';
-            awards.payout_summary.forEach(team => {
+            payoutSummary.forEach(team => {
                 const netClass = team.net_payout > 0 ? 'positive' : (team.net_payout < 0 ? 'negative' : '');
                 html += `<tr>
                     <td>${team.team_name}</td>
