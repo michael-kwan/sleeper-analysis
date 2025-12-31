@@ -488,3 +488,98 @@ class TransactionService:
             "fairness": fairness,
             "recommendation": recommendation,
         }
+
+    async def get_most_transacted_players(
+        self, weeks: int = 18, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """
+        Get players with the most transactions (adds + drops).
+
+        Args:
+            weeks: Number of weeks to analyze
+            limit: Maximum number of players to return
+
+        Returns:
+            List of players sorted by transaction count
+        """
+        all_txns = await self.get_all_transactions(weeks)
+
+        # Count transactions per player
+        player_counts: dict[str, int] = defaultdict(int)
+
+        for txn in all_txns:
+            if txn.adds:
+                for player_id in txn.adds.keys():
+                    player_counts[player_id] += 1
+            if txn.drops:
+                for player_id in txn.drops.keys():
+                    player_counts[player_id] += 1
+
+        # Sort and format
+        result = []
+        for player_id, count in sorted(
+            player_counts.items(), key=lambda x: x[1], reverse=True
+        )[:limit]:
+            result.append({
+                "player_id": player_id,
+                "player_name": self.ctx.get_player_name(player_id),
+                "position": self.ctx.get_player_position(player_id),
+                "transaction_count": count,
+            })
+
+        return result
+
+    async def get_player_trade_tree(
+        self, player_id: str, weeks: int = 18
+    ) -> dict[str, Any]:
+        """
+        Track a player's journey through all trades and ownership.
+
+        Args:
+            player_id: Player to track
+            weeks: Number of weeks to analyze
+
+        Returns:
+            Complete trade/ownership history for the player
+        """
+        all_txns = await self.get_all_transactions(weeks)
+
+        # Track player movement
+        ownership_chain = []
+        current_owner = None
+
+        for txn in sorted(all_txns, key=lambda x: x.week):
+            # Check if player was added
+            if txn.adds and player_id in txn.adds:
+                new_owner = txn.adds[player_id]
+                ownership_chain.append({
+                    "week": txn.week,
+                    "type": txn.type.value,
+                    "action": "acquired",
+                    "team": self.ctx.get_team_name(new_owner),
+                    "roster_id": new_owner,
+                    "from_team": self.ctx.get_team_name(current_owner) if current_owner else "Waivers/FA",
+                })
+                current_owner = new_owner
+
+            # Check if player was dropped
+            elif txn.drops and player_id in txn.drops:
+                dropping_owner = txn.drops[player_id]
+                ownership_chain.append({
+                    "week": txn.week,
+                    "type": txn.type.value,
+                    "action": "dropped",
+                    "team": self.ctx.get_team_name(dropping_owner),
+                    "roster_id": dropping_owner,
+                    "to": "Waivers/FA",
+                })
+                current_owner = None
+
+        return {
+            "player_id": player_id,
+            "player_name": self.ctx.get_player_name(player_id),
+            "position": self.ctx.get_player_position(player_id),
+            "total_transactions": len(ownership_chain),
+            "current_owner": self.ctx.get_team_name(current_owner) if current_owner else "Free Agent",
+            "ownership_chain": ownership_chain,
+        }

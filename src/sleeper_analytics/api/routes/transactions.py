@@ -185,3 +185,39 @@ async def get_team_activity(
     """Get teams ranked by transaction activity."""
     service = TransactionService(client, ctx, nfl_stats)
     return await service.get_most_active_teams(weeks)
+
+
+@router.get(
+    "/{league_id}/most-transacted",
+    response_model=list[dict[str, Any]],
+    summary="Get most transacted players",
+    description="Get players with the most adds/drops/trades.",
+)
+async def get_most_transacted_players(
+    ctx: LeagueContextDep,
+    client: SleeperClientDep,
+    nfl_stats: NFLStatsDep,
+    weeks: WeeksQuery = 18,
+    limit: Annotated[int, Query(description="Number of players to return")] = 20,
+) -> list[dict[str, Any]]:
+    """Get most transacted players."""
+    service = TransactionService(client, ctx, nfl_stats)
+    return await service.get_most_transacted_players(weeks, limit)
+
+
+@router.get(
+    "/{league_id}/player-tree/{player_id}",
+    response_model=dict[str, Any],
+    summary="Get player trade tree",
+    description="Track a player's complete ownership history through the league.",
+)
+async def get_player_trade_tree(
+    ctx: LeagueContextDep,
+    client: SleeperClientDep,
+    nfl_stats: NFLStatsDep,
+    player_id: Annotated[str, Path(description="Player ID")],
+    weeks: WeeksQuery = 18,
+) -> dict[str, Any]:
+    """Get player's complete trade/ownership tree."""
+    service = TransactionService(client, ctx, nfl_stats)
+    return await service.get_player_trade_tree(player_id, weeks)
