@@ -127,7 +127,6 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
     # Generate charts
     roster_construction_chart = generate_roster_construction_chart(roster_construction)
     luck_chart = generate_luck_chart(luck)
-    trades_chart = generate_trades_chart(trades) if trades.total_trades > 0 else None
     draft_chart = generate_draft_chart(draft)
 
     html = f"""<!DOCTYPE html>
@@ -506,8 +505,6 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
             <p><strong>Biggest Trade Winner:</strong> {trades.biggest_trade_winner} (+{trades.biggest_trade_winner_differential:.1f} pts)</p>
             <p><strong>Biggest Trade Loser:</strong> {trades.biggest_trade_loser} (-{trades.biggest_trade_loser_differential:.1f} pts)</p>
 
-            {f'<div style="margin-top: 30px;">{trades_chart}</div>' if trades_chart else ''}
-
             <table style="margin-top: 30px;">
                 <thead>
                     <tr>
@@ -515,7 +512,6 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                         <th>Winner (Players Received)</th>
                         <th>Loser (Players Received)</th>
                         <th>Point Differential</th>
-                        <th>Lopsidedness</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -535,7 +531,6 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                             </span>
                         </td>
                         <td class="highlight">+{trade.point_differential:.1f}</td>
-                        <td class="{'lowlight' if trade.lopsidedness_rating == 'Extremely Lopsided' else ''}">{trade.lopsidedness_rating}</td>
                     </tr>
                     """ for trade in trades.most_lopsided_trades[:10])}
                 </tbody>
@@ -1025,47 +1020,6 @@ def generate_draft_chart(draft):
         height=500,
         showlegend=True,
         hovermode='closest'
-    )
-
-    return fig.to_html(full_html=False, include_plotlyjs='cdn')
-
-
-def generate_trades_chart(trades):
-    """Generate bar chart for lopsided trades."""
-    import plotly.graph_objects as go
-
-    if not trades.most_lopsided_trades:
-        return None
-
-    # Take top 10 most lopsided trades
-    top_trades = trades.most_lopsided_trades[:10]
-
-    # Create labels with week and teams
-    labels = [f"Week {t.week}: {t.winner} vs {t.loser}" for t in top_trades]
-    differentials = [t.point_differential for t in top_trades]
-    colors = ['#f87171' if t.lopsidedness_rating == 'Extremely Lopsided'
-              else '#fb923c' if t.lopsidedness_rating == 'Lopsided'
-              else '#fbbf24' for t in top_trades]
-
-    fig = go.Figure()
-
-    fig.add_trace(go.Bar(
-        y=labels,
-        x=differentials,
-        orientation='h',
-        marker_color=colors,
-        hovertemplate='<b>%{y}</b><br>Point Differential: %{x:.1f} pts<extra></extra>'
-    ))
-
-    fig.update_layout(
-        title='Most Lopsided Trades (Point Differential After Trade)',
-        xaxis_title='Point Differential',
-        yaxis_title='',
-        plot_bgcolor='rgba(15, 23, 42, 0.8)',
-        paper_bgcolor='rgba(15, 23, 42, 0)',
-        font=dict(color='#e2e8f0'),
-        height=600,
-        yaxis=dict(autorange='reversed')  # Show most lopsided at top
     )
 
     return fig.to_html(full_html=False, include_plotlyjs='cdn')
