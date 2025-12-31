@@ -77,35 +77,6 @@
             100% { transform: rotate(360deg); }
         }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 25px;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .stat-card h3 {
-            font-size: 0.9em;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .stat-card .value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #667eea;
-        }
-
         .section {
             background: rgba(255, 255, 255, 0.05);
             padding: 30px;
@@ -121,6 +92,12 @@
             color: #667eea;
             border-bottom: 2px solid rgba(102, 126, 234, 0.3);
             padding-bottom: 10px;
+        }
+
+        .section h3 {
+            font-size: 1.3em;
+            margin: 25px 0 15px 0;
+            color: #a78bfa;
         }
 
         table {
@@ -156,6 +133,11 @@
             color: #f87171;
         }
 
+        .highlight {
+            background: rgba(102, 126, 234, 0.1);
+            font-weight: bold;
+        }
+
         .error {
             background: rgba(248, 113, 113, 0.1);
             border: 1px solid #f87171;
@@ -184,18 +166,22 @@
             background: rgba(255, 255, 255, 0.15);
         }
 
-        .chart-container {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 30px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .toggle-container {
+            margin: 20px 0;
         }
 
-        .chart {
-            width: 100%;
-            height: 500px;
+        .toggle-container label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+        }
+
+        .toggle-container input[type="checkbox"] {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
         }
     </style>
 </head>
@@ -229,7 +215,7 @@
 
         // Get league ID from URL
         const params = new URLSearchParams(window.location.search);
-        const leagueId = params.get('id');
+        const leagueId = params.get('league_id');
 
         if (!leagueId) {
             document.getElementById('error').style.display = 'block';
@@ -257,6 +243,30 @@
             return response.json();
         }
 
+        function toggleQBs() {
+            const excludeQBs = document.getElementById('excludeQBs').checked;
+
+            // Filter table rows
+            const rows = document.querySelectorAll('.draft-pick-row');
+            rows.forEach(row => {
+                const position = row.getAttribute('data-position');
+                if (position === 'QB') {
+                    row.style.display = excludeQBs ? 'none' : '';
+                }
+            });
+
+            // Filter Plotly chart
+            const chartDiv = document.getElementById('draftChart');
+            if (chartDiv && chartDiv.data) {
+                const scatterTrace = chartDiv.data[1];
+                if (scatterTrace && scatterTrace.customdata) {
+                    const visibility = scatterTrace.customdata.map(pos => pos !== 'QB' || !excludeQBs);
+                    const sizes = visibility.map(v => v ? 10 : 0);
+                    Plotly.restyle(chartDiv, {'marker.size': [sizes]}, [1]);
+                }
+            }
+        }
+
         async function generateReport(leagueId) {
             try {
                 await updateStatus('📊 Fetching league information...');
@@ -268,340 +278,374 @@
                 document.getElementById('league-name').textContent = league.name;
                 document.getElementById('league-info').textContent = `Season ${league.season} • ${league.total_rosters} Teams`;
 
-                await updateStatus('🏆 Fetching standings...');
-                const standings = await fetchAPI(`/api/matchups/${leagueId}/standings?weeks=14`);
+                // Fetch all data concurrently
+                await updateStatus('🔄 Fetching all analytics data...');
 
-                await updateStatus('🎖️ Fetching awards...');
-                const awards = await fetchAPI(`/api/awards/${leagueId}/season?weeks=14`);
+                const [standings, awards, benchwarmers, luck, faab, rosterConstruction, draft, trades] = await Promise.all([
+                    fetchAPI(`/api/matchups/${leagueId}/standings?weeks=14`),
+                    fetchAPI(`/api/awards/${leagueId}/season?weeks=14`),
+                    fetchAPI(`/api/benchwarmer/${leagueId}/league?weeks=14`),
+                    fetchAPI(`/api/luck/${leagueId}/league?weeks=14`),
+                    fetchAPI(`/api/faab/${leagueId}/report?weeks=14`),
+                    fetchAPI(`/api/roster-construction/${leagueId}/report?weeks=14`),
+                    fetchAPI(`/api/draft/${leagueId}/analysis?weeks=14`),
+                    fetchAPI(`/api/trades/${leagueId}/report?weeks=14`)
+                ]);
 
-                await updateStatus('💺 Fetching benchwarmer analysis...');
-                const benchwarmers = await fetchAPI(`/api/benchwarmer/${leagueId}/league?weeks=14`);
+                await updateStatus('📝 Generating comprehensive report...');
 
-                await updateStatus('🍀 Fetching luck analysis...');
-                const luck = await fetchAPI(`/api/luck/${leagueId}/league?weeks=14`);
-
-                await updateStatus('💰 Fetching FAAB analysis...');
-                const faab = await fetchAPI(`/api/faab/${leagueId}/report?weeks=14`);
-
-                await updateStatus('📝 Generating report...');
-
-                // Build HTML content
-                let html = '<div class="stats-grid">';
-                html += `<div class="stat-card"><h3>Teams</h3><div class="value">${league.total_rosters}</div></div>`;
-                html += `<div class="stat-card"><h3>Weeks Played</h3><div class="value">14</div></div>`;
-                html += `<div class="stat-card"><h3>Total FAAB Spent</h3><div class="value">$${faab.total_faab_spent}</div></div>`;
-                html += `<div class="stat-card"><h3>High Score</h3><div class="value">${Math.max(...awards.weekly_awards.map(w => w.high_score)).toFixed(1)}</div></div>`;
-                html += '</div>';
-
-                // Standings
-                html += '<div class="section"><h2>🏆 League Standings</h2><table>';
-                html += '<thead><tr><th>Rank</th><th>Team</th><th>Record</th><th>PF</th><th>PA</th><th>Diff</th></tr></thead><tbody>';
-                standings.forEach((team, idx) => {
-                    const diff = team.points_for - team.points_against;
-                    const diffClass = diff > 0 ? 'positive' : 'negative';
-                    html += `<tr>`;
-                    html += `<td>${idx + 1}</td>`;
-                    html += `<td>${team.team_name}</td>`;
-                    html += `<td>${team.wins}-${team.losses}</td>`;
-                    html += `<td>${team.points_for.toFixed(2)}</td>`;
-                    html += `<td>${team.points_against.toFixed(2)}</td>`;
-                    html += `<td class="${diffClass}">${diff > 0 ? '+' : ''}${diff.toFixed(2)}</td>`;
-                    html += `</tr>`;
-                });
-                html += '</tbody></table></div>';
-
-                // Weekly Awards
-                html += '<div class="section"><h2>🎖️ Weekly Awards (High/Low Scorers)</h2><table>';
-                html += '<thead><tr><th>Week</th><th>High Scorer</th><th>Score</th><th>Low Scorer</th><th>Score</th></tr></thead><tbody>';
-                awards.weekly_awards.forEach(week => {
-                    html += `<tr>`;
-                    html += `<td>${week.week}</td>`;
-                    html += `<td>${week.high_scorer}</td>`;
-                    html += `<td class="positive">${week.high_score.toFixed(2)}</td>`;
-                    html += `<td>${week.low_scorer}</td>`;
-                    html += `<td class="negative">${week.low_score.toFixed(2)}</td>`;
-                    html += `</tr>`;
-                });
-                html += '</tbody></table></div>';
-
-                // Luck Analysis
-                html += '<div class="section"><h2>🍀 Luck Analysis</h2><table>';
-                html += '<thead><tr><th>Team</th><th>Record</th><th>Expected Record</th><th>Luck Score</th><th>SOS</th></tr></thead><tbody>';
-                luck.team_reports.forEach(team => {
-                    const luckClass = team.luck_score > 0 ? 'positive' : 'negative';
-                    html += `<tr>`;
-                    html += `<td>${team.team_name}</td>`;
-                    html += `<td>${team.actual_record}</td>`;
-                    html += `<td>${team.expected_record}</td>`;
-                    html += `<td class="${luckClass}">${team.luck_score > 0 ? '+' : ''}${team.luck_score.toFixed(1)}</td>`;
-                    html += `<td>${team.strength_of_schedule.avg_opponent_points.toFixed(1)}</td>`;
-                    html += `</tr>`;
-                });
-                html += '</tbody></table></div>';
-
-                // FAAB Rankings
-                html += '<div class="section"><h2>💰 FAAB Efficiency Rankings</h2><table>';
-                html += '<thead><tr><th>Rank</th><th>Team</th><th>Spent</th><th>Remaining</th><th>Total Points</th><th>Avg ROI</th></tr></thead><tbody>';
-                faab.owner_rankings.forEach(owner => {
-                    html += `<tr>`;
-                    html += `<td>${owner.faab_efficiency_rank}</td>`;
-                    html += `<td>${owner.owner_name}</td>`;
-                    html += `<td>$${owner.total_faab_spent}</td>`;
-                    html += `<td>$${owner.faab_remaining}</td>`;
-                    html += `<td>${owner.total_points_from_faab.toFixed(1)}</td>`;
-                    html += `<td>${owner.avg_roi.toFixed(2)}</td>`;
-                    html += `</tr>`;
-                });
-                html += '</tbody></table></div>';
-
-                // Best FAAB Pickups
-                if (faab.best_value_pickups && faab.best_value_pickups.length > 0) {
-                    html += '<div class="section"><h2>💎 Best Value FAAB Pickups</h2><table>';
-                    html += '<thead><tr><th>Player</th><th>Owner</th><th>FAAB</th><th>Points</th><th>ROI</th></tr></thead><tbody>';
-                    faab.best_value_pickups.slice(0, 10).forEach(pickup => {
-                        html += `<tr>`;
-                        html += `<td>${pickup.player_name} (${pickup.position})</td>`;
-                        html += `<td>${pickup.owner_name}</td>`;
-                        html += `<td>$${pickup.faab_spent}</td>`;
-                        html += `<td>${pickup.points_during_ownership.toFixed(1)}</td>`;
-                        html += `<td class="positive">${pickup.roi.toFixed(2)}</td>`;
-                        html += `</tr>`;
-                    });
-                    html += '</tbody></table></div>';
-                }
-
-                // Benchwarmer Report
-                html += '<div class="section"><h2>💺 Biggest Benchwarmers (Top 10)</h2><table>';
-                html += '<thead><tr><th>Team</th><th>Total Bench Points</th><th>Avg/Week</th><th>Worst Decision</th></tr></thead><tbody>';
-                benchwarmers.all_teams.slice(0, 10).forEach(team => {
-                    const worstDecision = team.worst_benching_decision;
-                    html += `<tr>`;
-                    html += `<td>${team.team_name}</td>`;
-                    html += `<td class="negative">${team.total_bench_points.toFixed(1)}</td>`;
-                    html += `<td class="negative">${team.avg_bench_points_per_week.toFixed(1)}</td>`;
-                    if (worstDecision) {
-                        html += `<td class="negative">${worstDecision.player_name} (${worstDecision.points.toFixed(1)} pts, Wk ${worstDecision.week})</td>`;
-                    } else {
-                        html += `<td>-</td>`;
-                    }
-                    html += `</tr>`;
-                });
-                html += '</tbody></table></div>';
+                // Build complete HTML content
+                let html = buildStandingsSection(standings);
+                html += buildAwardsSection(awards);
+                html += buildBenchwarmerSection(benchwarmers);
+                html += buildLuckSection(luck);
+                html += buildFAABSection(faab);
+                html += buildRosterConstructionSection(rosterConstruction);
+                html += buildDraftSection(draft);
+                html += buildTradesSection(trades);
 
                 // Set content and hide loading
                 document.getElementById('content').innerHTML = html;
                 document.getElementById('content').style.display = 'block';
                 document.getElementById('loading').style.display = 'none';
 
-                // Render charts after content is loaded
-                await updateStatus('📊 Rendering charts...');
-                setTimeout(() => {
-                    renderStandingsChart(standings);
-                    renderWeeklyScoresChart(awards);
-                    renderLuckScatterChart(luck);
-                    renderFAABChart(faab);
-                    renderBenchwarmerChart(benchwarmers);
-                }, 100);
+                await updateStatus('📊 Complete!');
 
             } catch (error) {
                 console.error('Error generating report:', error);
-                await showError(`Failed to generate report: ${error.message}`);
+                await showError(`Failed to generate report: ${error.message}. Make sure the league ID is valid and the API is running.`);
             }
         }
 
-        // Chart rendering functions
-        function renderStandingsChart(standings) {
-            const teams = standings.map(s => s.team_name);
-            const pointsFor = standings.map(s => s.points_for);
-            const pointsAgainst = standings.map(s => s.points_against);
-
-            const trace1 = {
-                x: teams,
-                y: pointsFor,
-                name: 'Points For',
-                type: 'bar',
-                marker: { color: '#4ade80' }
-            };
-
-            const trace2 = {
-                x: teams,
-                y: pointsAgainst,
-                name: 'Points Against',
-                type: 'bar',
-                marker: { color: '#f87171' }
-            };
-
-            const layout = {
-                title: 'Points For vs Against',
-                barmode: 'group',
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                font: { color: '#e0e0e0' },
-                xaxis: { tickangle: -45 },
-                margin: { b: 150 }
-            };
-
-            // Create chart div and render
-            const chartDiv = document.createElement('div');
-            chartDiv.className = 'chart-container';
-            chartDiv.innerHTML = '<div id="standings-chart" class="chart"></div>';
-            document.getElementById('content').appendChild(chartDiv);
-
-            Plotly.newPlot('standings-chart', [trace1, trace2], layout, {responsive: true});
+        function buildStandingsSection(standings) {
+            let html = '<div class="section"><h2>🏆 League Standings</h2><table>';
+            html += '<thead><tr><th>Rank</th><th>Team</th><th>Record</th><th>PF</th><th>PA</th><th>Diff</th></tr></thead><tbody>';
+            standings.forEach((team, idx) => {
+                const diff = team.points_for - team.points_against;
+                const diffClass = diff > 0 ? 'positive' : 'negative';
+                html += `<tr>
+                    <td>${idx + 1}</td>
+                    <td>${team.team_name}</td>
+                    <td>${team.wins}-${team.losses}</td>
+                    <td>${team.points_for.toFixed(2)}</td>
+                    <td>${team.points_against.toFixed(2)}</td>
+                    <td class="${diffClass}">${diff > 0 ? '+' : ''}${diff.toFixed(2)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            return html;
         }
 
-        function renderWeeklyScoresChart(awards) {
-            const weeks = awards.weekly_awards.map(w => w.week);
-            const highScores = awards.weekly_awards.map(w => w.high_score);
-            const lowScores = awards.weekly_awards.map(w => w.low_score);
+        function buildAwardsSection(awards) {
+            let html = '<div class="section"><h2>🎖️ Weekly Awards (High/Low Scorers)</h2>';
+            html += '<p style="margin-bottom: 15px; color: #94a3b8;">$5/week payout for high scorer, $5/week penalty for low scorer</p>';
+            html += '<table><thead><tr><th>Week</th><th>High Scorer</th><th>Score</th><th>Low Scorer</th><th>Score</th></tr></thead><tbody>';
+            awards.weekly_awards.forEach(week => {
+                html += `<tr>
+                    <td>${week.week}</td>
+                    <td>${week.high_scorer}</td>
+                    <td class="positive">${week.high_score.toFixed(2)}</td>
+                    <td>${week.low_scorer}</td>
+                    <td class="negative">${week.low_score.toFixed(2)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
 
-            const trace1 = {
-                x: weeks,
-                y: highScores,
-                name: 'High Score',
-                type: 'scatter',
-                mode: 'lines+markers',
-                line: { color: '#4ade80', width: 3 },
-                marker: { size: 8 }
-            };
-
-            const trace2 = {
-                x: weeks,
-                y: lowScores,
-                name: 'Low Score',
-                type: 'scatter',
-                mode: 'lines+markers',
-                line: { color: '#f87171', width: 3 },
-                marker: { size: 8 }
-            };
-
-            const layout = {
-                title: 'Weekly High/Low Scores',
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                font: { color: '#e0e0e0' },
-                xaxis: { title: 'Week' },
-                yaxis: { title: 'Points' }
-            };
-
-            const chartDiv = document.createElement('div');
-            chartDiv.className = 'chart-container';
-            chartDiv.innerHTML = '<div id="weekly-chart" class="chart"></div>';
-            document.getElementById('content').appendChild(chartDiv);
-
-            Plotly.newPlot('weekly-chart', [trace1, trace2], layout, {responsive: true});
+            // Payout summary
+            html += '<h3>Season Payout Summary</h3><table>';
+            html += '<thead><tr><th>Team</th><th>High Scorer Count</th><th>Low Scorer Count</th><th>Net Payout</th></tr></thead><tbody>';
+            awards.payout_summary.forEach(team => {
+                const netClass = team.net_payout > 0 ? 'positive' : (team.net_payout < 0 ? 'negative' : '');
+                html += `<tr>
+                    <td>${team.team_name}</td>
+                    <td class="positive">${team.high_scorer_count}</td>
+                    <td class="negative">${team.low_scorer_count}</td>
+                    <td class="${netClass}">${team.net_payout > 0 ? '+' : ''}$${team.net_payout}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            return html;
         }
 
-        function renderLuckScatterChart(luck) {
-            const teams = luck.team_reports.map(t => t.team_name);
-            const luckScores = luck.team_reports.map(t => t.luck_score);
-            const wins = luck.team_reports.map(t => t.actual_wins);
+        function buildBenchwarmerSection(benchwarmers) {
+            let html = '<div class="section"><h2>💺 Benchwarmer Analysis</h2>';
+            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Total points scored by players while on the bench (points left on the table each week)</p>';
+            html += '<table><thead><tr><th>Rank</th><th>Team</th><th>Total Bench Points</th><th>Avg/Week</th><th>Worst Benching</th></tr></thead><tbody>';
+            benchwarmers.all_teams.forEach((team, idx) => {
+                const worstDecision = team.worst_benching_decision;
+                html += `<tr>
+                    <td>${idx + 1}</td>
+                    <td>${team.team_name}</td>
+                    <td class="negative">${team.total_bench_points.toFixed(1)}</td>
+                    <td class="negative">${team.avg_bench_points_per_week.toFixed(1)}</td>
+                    <td class="negative">${worstDecision ? `${worstDecision.player_name} (${worstDecision.points.toFixed(1)} pts, Wk ${worstDecision.week})` : '-'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            return html;
+        }
 
-            const trace = {
-                x: luckScores,
-                y: wins,
-                text: teams,
-                mode: 'markers+text',
-                type: 'scatter',
+        function buildLuckSection(luck) {
+            let html = '<div class="section"><h2>🍀 Luck Analysis</h2>';
+            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Compares actual record vs expected record based on weekly performance. Positive luck = won more than expected.</p>';
+            html += '<table><thead><tr><th>Team</th><th>Actual Record</th><th>Expected Record</th><th>Luck Score</th><th>SOS (Avg Opponent PF)</th></tr></thead><tbody>';
+
+            // Sort by actual wins descending
+            const sortedTeams = [...luck.team_reports].sort((a, b) => b.actual_wins - a.actual_wins);
+
+            sortedTeams.forEach(team => {
+                const luckClass = team.luck_score > 0 ? 'positive' : 'negative';
+                html += `<tr>
+                    <td>${team.team_name}</td>
+                    <td>${team.actual_record}</td>
+                    <td>${team.expected_record}</td>
+                    <td class="${luckClass}">${team.luck_score > 0 ? '+' : ''}${team.luck_score.toFixed(1)}</td>
+                    <td>${team.strength_of_schedule.avg_opponent_points.toFixed(1)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            return html;
+        }
+
+        function buildFAABSection(faab) {
+            let html = '<div class="section"><h2>💰 FAAB Analysis</h2>';
+            html += '<p style="margin-bottom: 15px; color: #94a3b8;">FAAB efficiency measured by ROI (points scored per dollar spent). Only counts points when player was in starting lineup.</p>';
+
+            html += '<h3>Team FAAB Rankings</h3><table>';
+            html += '<thead><tr><th>Rank</th><th>Team</th><th>Spent</th><th>Remaining</th><th>Total Points</th><th>Avg ROI</th></tr></thead><tbody>';
+            faab.owner_rankings.forEach(owner => {
+                html += `<tr>
+                    <td>${owner.faab_efficiency_rank}</td>
+                    <td>${owner.owner_name}</td>
+                    <td>$${owner.total_faab_spent}</td>
+                    <td>$${owner.faab_remaining}</td>
+                    <td>${owner.total_points_from_faab.toFixed(1)}</td>
+                    <td>${owner.avg_roi.toFixed(2)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+
+            // Best pickups
+            if (faab.best_value_pickups && faab.best_value_pickups.length > 0) {
+                html += '<h3>Best Value FAAB Pickups</h3><table>';
+                html += '<thead><tr><th>Player</th><th>Owner</th><th>FAAB</th><th>Points (Started)</th><th>ROI</th></tr></thead><tbody>';
+                faab.best_value_pickups.slice(0, 10).forEach(pickup => {
+                    html += `<tr>
+                        <td>${pickup.player_name} (${pickup.position})</td>
+                        <td>${pickup.owner_name}</td>
+                        <td>$${pickup.faab_spent}</td>
+                        <td>${pickup.points_during_ownership.toFixed(1)}</td>
+                        <td class="positive">${pickup.roi.toFixed(2)}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function buildRosterConstructionSection(rosterConstruction) {
+            let html = '<div class="section"><h2>🏗️ Roster Construction</h2>';
+            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Shows where each team\'s points came from: Draft, Trades, Waivers, or Free Agency. Only counts points when players were in starting lineup during ownership period.</p>';
+
+            html += '<table><thead><tr><th>Team</th><th>Draft %</th><th>Trade %</th><th>Waiver %</th><th>FA %</th><th>Primary Source</th></tr></thead><tbody>';
+            rosterConstruction.all_teams.forEach(team => {
+                html += `<tr>
+                    <td>${team.team_name}</td>
+                    <td>${team.breakdown.draft_percentage.toFixed(1)}%</td>
+                    <td>${team.breakdown.trade_percentage.toFixed(1)}%</td>
+                    <td>${team.breakdown.waiver_percentage.toFixed(1)}%</td>
+                    <td>${team.breakdown.free_agent_percentage.toFixed(1)}%</td>
+                    <td class="highlight">${team.primary_source}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            return html;
+        }
+
+        function buildDraftSection(draft) {
+            let html = '<div class="section"><h2>🎯 Draft Analysis</h2>';
+            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Analyzes draft performance vs expected value. Best picks exceeded expectations, worst picks underperformed.</p>';
+
+            // QB Toggle
+            html += '<div class="toggle-container">';
+            html += '<label><input type="checkbox" id="excludeQBs" onchange="toggleQBs()"><span>Exclude QBs from chart and tables</span></label>';
+            html += '</div>';
+
+            // Draft chart will be inserted here
+            html += '<div id="draftChart" style="width: 100%; height: 500px; margin: 20px 0;"></div>';
+
+            // Best Picks
+            html += '<h3>Top 5 Best Picks (Most Above Expected)</h3><table>';
+            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead><tbody>';
+            if (draft.best_picks) {
+                draft.best_picks.forEach(pick => {
+                    html += `<tr class="draft-pick-row" data-position="${pick.position}">
+                        <td>${pick.pick_number}</td>
+                        <td>${pick.player_name} (${pick.position})</td>
+                        <td>${pick.team_name}</td>
+                        <td>${pick.points_scored.toFixed(1)}</td>
+                        <td>${pick.expected_points.toFixed(1)}</td>
+                        <td class="positive">+${pick.value_diff.toFixed(1)}</td>
+                    </tr>`;
+                });
+            }
+            html += '</tbody></table>';
+
+            // Worst Picks
+            html += '<h3>Top 5 Worst Picks (Most Below Expected)</h3><table>';
+            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead><tbody>';
+            if (draft.worst_picks) {
+                draft.worst_picks.forEach(pick => {
+                    html += `<tr class="draft-pick-row" data-position="${pick.position}">
+                        <td>${pick.pick_number}</td>
+                        <td>${pick.player_name} (${pick.position})</td>
+                        <td>${pick.team_name}</td>
+                        <td>${pick.points_scored.toFixed(1)}</td>
+                        <td>${pick.expected_points.toFixed(1)}</td>
+                        <td class="negative">${pick.value_diff.toFixed(1)}</td>
+                    </tr>`;
+                });
+            }
+            html += '</tbody></table></div>';
+
+            // Render draft chart
+            setTimeout(() => renderDraftChart(draft), 100);
+
+            return html;
+        }
+
+        function renderDraftChart(draft) {
+            if (!draft.team_grades || draft.team_grades.length === 0) return;
+
+            // Collect all picks
+            const pickNumbers = [];
+            const actualPoints = [];
+            const positions = [];
+            const playerNames = [];
+            const teamNames = [];
+
+            draft.team_grades.forEach(team => {
+                team.picks.forEach(pick => {
+                    pickNumbers.push(pick.pick_number);
+                    actualPoints.push(pick.points_scored);
+                    positions.push(pick.position);
+                    playerNames.push(pick.player_name);
+                    teamNames.push(team.team_name);
+                });
+            });
+
+            // Calculate trend line (polynomial fit approximation)
+            const trendX = [];
+            const trendY = [];
+            for (let i = Math.min(...pickNumbers); i <= Math.max(...pickNumbers); i++) {
+                trendX.push(i);
+                // Simple power law approximation: points = a / x^b
+                trendY.push(200 / Math.pow(i, 0.5));
+            }
+
+            // Trend line trace
+            const trendTrace = {
+                x: trendX,
+                y: trendY,
+                mode: 'lines',
+                name: 'Expected Points',
+                line: { color: '#94a3b8', width: 3, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            // Scatter trace
+            const scatterTrace = {
+                x: pickNumbers,
+                y: actualPoints,
+                mode: 'markers',
+                name: 'Actual Points',
                 marker: {
-                    size: 12,
-                    color: luckScores,
-                    colorscale: [[0, '#f87171'], [0.5, '#e0e0e0'], [1, '#4ade80']],
+                    size: 10,
+                    color: actualPoints,
+                    colorscale: 'Viridis',
                     showscale: true,
-                    colorbar: { title: 'Luck Score' }
+                    colorbar: { title: 'Points' }
                 },
-                textposition: 'top center'
+                text: playerNames.map((name, i) => `${name} (${positions[i]}) - ${teamNames[i]}`),
+                customdata: positions,
+                hovertemplate: '%{text}<br>Pick: %{x}<br>Points: %{y:.1f}<extra></extra>'
             };
 
             const layout = {
-                title: 'Luck vs Wins',
+                title: 'Draft Pick Value Analysis',
                 paper_bgcolor: 'rgba(0,0,0,0)',
                 plot_bgcolor: 'rgba(0,0,0,0)',
                 font: { color: '#e0e0e0' },
-                xaxis: { title: 'Luck Score', zeroline: true },
-                yaxis: { title: 'Wins' },
-                shapes: [{
-                    type: 'line',
-                    x0: 0,
-                    y0: 0,
-                    x1: 0,
-                    y1: 14,
-                    line: { color: '#667eea', width: 2, dash: 'dash' }
-                }]
+                xaxis: {
+                    title: 'Pick Number',
+                    gridcolor: '#374151',
+                    gridwidth: 1
+                },
+                yaxis: {
+                    title: 'Points Scored',
+                    gridcolor: '#374151',
+                    gridwidth: 1
+                },
+                hovermode: 'closest',
+                showlegend: true
             };
 
-            const chartDiv = document.createElement('div');
-            chartDiv.className = 'chart-container';
-            chartDiv.innerHTML = '<div id="luck-chart" class="chart"></div>';
-            document.getElementById('content').appendChild(chartDiv);
-
-            Plotly.newPlot('luck-chart', [trace], layout, {responsive: true});
+            Plotly.newPlot('draftChart', [trendTrace, scatterTrace], layout, {responsive: true});
         }
 
-        function renderFAABChart(faab) {
-            const teams = faab.owner_rankings.map(o => o.owner_name);
-            const roi = faab.owner_rankings.map(o => o.avg_roi);
-            const spent = faab.owner_rankings.map(o => o.total_faab_spent);
+        function buildTradesSection(trades) {
+            let html = '<div class="section"><h2>🤝 Trade Analysis</h2>';
+            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Analyzes trade outcomes based on points scored after the trade.</p>';
 
-            const trace = {
-                x: teams,
-                y: roi,
-                type: 'bar',
-                marker: {
-                    color: roi,
-                    colorscale: [[0, '#f87171'], [0.5, '#667eea'], [1, '#4ade80']],
-                    showscale: false
-                },
-                text: spent.map(s => `$${s}`),
-                textposition: 'outside'
-            };
+            if (trades.most_lopsided_trades && trades.most_lopsided_trades.length > 0) {
+                html += '<h3>Most Lopsided Trades</h3><table>';
+                html += '<thead><tr><th>Week</th><th>Winner (Players Received)</th><th>Loser (Players Received)</th><th>Point Differential</th></tr></thead><tbody>';
+                trades.most_lopsided_trades.slice(0, 10).forEach(trade => {
+                    const winnerPlayers = trade.winner === trade.team_a ? trade.team_a_players : trade.team_b_players;
+                    const loserPlayers = trade.winner === trade.team_a ? trade.team_b_players : trade.team_a_players;
 
-            const layout = {
-                title: 'FAAB Efficiency (ROI)',
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                font: { color: '#e0e0e0' },
-                xaxis: { tickangle: -45 },
-                yaxis: { title: 'Average ROI' },
-                margin: { b: 150 }
-            };
+                    html += `<tr>
+                        <td>${trade.week}</td>
+                        <td>
+                            <strong>${trade.winner}</strong><br>
+                            <span style="color: #94a3b8; font-size: 0.85em;">
+                                ${winnerPlayers.map(p => `${p.player_name} (${p.position}): ${p.points_after_trade.toFixed(1)} pts`).join('<br>')}
+                            </span>
+                        </td>
+                        <td>
+                            <strong>${trade.loser}</strong><br>
+                            <span style="color: #94a3b8; font-size: 0.85em;">
+                                ${loserPlayers.map(p => `${p.player_name} (${p.position}): ${p.points_after_trade.toFixed(1)} pts`).join('<br>')}
+                            </span>
+                        </td>
+                        <td class="highlight positive">+${trade.point_differential.toFixed(1)}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
 
-            const chartDiv = document.createElement('div');
-            chartDiv.className = 'chart-container';
-            chartDiv.innerHTML = '<div id="faab-chart" class="chart"></div>';
-            document.getElementById('content').appendChild(chartDiv);
+            // Transaction Activity
+            html += '<h3>Transaction Activity Breakdown</h3>';
+            html += '<p style="margin-bottom: 10px; color: #94a3b8;">Shows total moves by type: Trades, Waivers, and Free Agent pickups</p>';
+            html += '<table><thead><tr><th>Team</th><th>Trades</th><th>Waivers</th><th>Free Agents</th><th>Total Moves</th></tr></thead><tbody>';
 
-            Plotly.newPlot('faab-chart', [trace], layout, {responsive: true});
-        }
+            if (trades.transaction_activity) {
+                const sortedActivity = [...trades.transaction_activity].sort((a, b) => b.total_moves - a.total_moves);
+                sortedActivity.forEach(team => {
+                    html += `<tr>
+                        <td>${team.team_name}</td>
+                        <td>${team.trade_count}</td>
+                        <td>${team.waiver_count}</td>
+                        <td>${team.free_agent_count}</td>
+                        <td class="highlight">${team.total_moves}</td>
+                    </tr>`;
+                });
+            }
+            html += '</tbody></table></div>';
 
-        function renderBenchwarmerChart(benchwarmers) {
-            const teams = benchwarmers.all_teams.map(t => t.team_name);
-            const benchPoints = benchwarmers.all_teams.map(t => t.total_bench_points);
-
-            const trace = {
-                labels: teams,
-                values: benchPoints,
-                type: 'pie',
-                marker: {
-                    colors: ['#667eea', '#764ba2', '#f87171', '#4ade80', '#fbbf24', '#60a5fa', '#a78bfa', '#fb923c']
-                },
-                textinfo: 'label+percent',
-                hoverinfo: 'label+value'
-            };
-
-            const layout = {
-                title: 'Bench Points Distribution',
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                font: { color: '#e0e0e0' },
-                showlegend: false
-            };
-
-            const chartDiv = document.createElement('div');
-            chartDiv.className = 'chart-container';
-            chartDiv.innerHTML = '<div id="benchwarmer-chart" class="chart"></div>';
-            document.getElementById('content').appendChild(chartDiv);
-
-            Plotly.newPlot('benchwarmer-chart', [trace], layout, {responsive: true});
+            return html;
         }
     </script>
 </body>
