@@ -1,111 +1,129 @@
 # Local Development Guide
 
-Test changes locally before deploying to Railway.
+Test changes locally by generating static HTML reports before deploying.
 
 ## Quick Start
 
-### 1. Start the API Server
+### 1. Make Your Changes
+
+Edit Python files in `src/sleeper_analytics/` (models, services, routes, etc.)
+
+### 2. Generate Reports Locally
 
 ```bash
-PYTHONPATH=/Users/michaelkwan/Documents/sleeper-analysis/src uv run uvicorn sleeper_analytics.main:app --host 0.0.0.0 --port 8000 --reload
+PYTHONPATH=/Users/michaelkwan/Documents/sleeper-analysis/src $HOME/.local/bin/uv run python generate_reports.py
 ```
 
-The `--reload` flag means the server will auto-restart when you change Python code.
+This will:
+- Read leagues from `leagues.json`
+- Fetch all analytics data
+- Generate static HTML reports in `docs/` folder
+- Create reports for each league + index page
 
-### 2. Open the Local Frontend
+### 3. Test in Browser
 
-Open in your browser:
+Open the generated HTML files:
+
+```bash
+open docs/tip-your-runningbacks.html
+open docs/supa-flexas.html
+open docs/index.html
 ```
-file:///Users/michaelkwan/Documents/sleeper-analysis/docs/app-local.html?id=1257152597513490432
+
+Or just double-click them in Finder.
+
+### 4. Verify Everything Works
+
+Check:
+- ✅ All tables render correctly
+- ✅ No "undefined" values
+- ✅ Charts display properly
+- ✅ Data looks accurate
+
+### 5. Deploy When Ready
+
+```bash
+git add .
+git commit -m "Your changes"
+git push
 ```
 
-Or use any league ID:
-```
-file:///Users/michaelkwan/Documents/sleeper-analysis/docs/app-local.html?id=YOUR_LEAGUE_ID
-```
-
-### 3. Make Changes & Test
-
-**Frontend Changes:**
-1. Edit `docs/app-local.html`
-2. Refresh browser (Cmd+R)
-3. See changes immediately
-
-**Backend Changes:**
-1. Edit Python files in `src/sleeper_analytics/`
-2. Server auto-reloads
-3. Refresh browser to see API changes
-
-## API Endpoints
-
-Once running locally, you can test API endpoints directly:
-
-- Health: http://localhost:8000/health
-- Docs: http://localhost:8000/docs
-- Standings: http://localhost:8000/api/matchups/{league_id}/standings?weeks=14
-- Awards: http://localhost:8000/api/awards/{league_id}/season?weeks=14
-- Luck: http://localhost:8000/api/luck/{league_id}/league?weeks=14
-- FAAB: http://localhost:8000/api/faab/{league_id}/report?weeks=14
-- Benchwarmer: http://localhost:8000/api/benchwarmer/{league_id}/league?weeks=14
+Railway will auto-deploy the backend, GitHub Pages will update the frontend.
 
 ## Testing Workflow
 
-1. Make backend changes
-2. Test API endpoint in browser or with curl:
-   ```bash
-   curl http://localhost:8000/api/luck/1257152597513490432/league?weeks=14 | jq
-   ```
-3. Make frontend changes in `app-local.html`
-4. Refresh browser to test
-5. When everything works, copy changes to `app.html`
-6. Commit and push to deploy to Railway
-
-## Deploying Changes
-
-**Frontend Only:**
 ```bash
-# Copy local changes to production file
-cp docs/app-local.html docs/app.html
+# 1. Edit Python code
+vim src/sleeper_analytics/services/luck_analysis.py
 
-# Update API_BASE back to Railway
-# Edit docs/app.html and change:
-# const API_BASE = 'http://localhost:8000';
-# to:
-# const API_BASE = 'https://sleeper-analysis-production.up.railway.app';
+# 2. Generate reports
+PYTHONPATH=src uv run python generate_reports.py
 
-git add docs/app.html
-git commit -m "Update frontend"
-git push
+# 3. Open in browser
+open docs/tip-your-runningbacks.html
+
+# 4. See the changes, fix bugs
+
+# 5. Repeat 2-4 until perfect
+
+# 6. Commit and push
+git add . && git commit -m "Fix luck analysis" && git push
 ```
 
-**Backend Changes:**
-```bash
-# Just push - Railway auto-deploys
-git add src/
-git commit -m "Update backend"
-git push
-# Railway will automatically rebuild and deploy
+## Adding New Analytics
+
+1. Create models in `src/sleeper_analytics/models/`
+2. Create service in `src/sleeper_analytics/services/`
+3. Create API route in `src/sleeper_analytics/api/routes/`
+4. Update `generate_reports.py` to fetch new data
+5. Update HTML template in `generate_reports.py` to display it
+6. Test locally: `PYTHONPATH=src uv run python generate_reports.py`
+7. Open HTML, verify it works
+8. Commit and push
+
+## Advantages
+
+- ✅ No server to run
+- ✅ No CORS issues
+- ✅ Fast iteration
+- ✅ See exactly what users will see
+- ✅ Test with real data from your leagues
+- ✅ Catch bugs before deployment
+
+## Testing With Different Leagues
+
+Edit `leagues.json` to add test leagues:
+
+```json
+{
+  "leagues": [
+    {"id": "1257152597513490432", "name": "tip your runningbacks", "season": 2025},
+    {"id": "1261570852047040512", "name": "supa flexas", "season": 2025},
+    {"id": "ANY_OTHER_LEAGUE_ID", "name": "test league", "season": 2025}
+  ]
+}
 ```
 
-## Tips
-
-- Use browser DevTools (F12) to see console errors
-- Check Network tab to see API requests/responses
-- Use `--reload` flag so server restarts on code changes
-- Test with multiple league IDs to catch edge cases
-- `app-local.html` is gitignored so you won't accidentally deploy it
+Then run generate_reports.py to create reports for all of them.
 
 ## Common Issues
 
-**Port already in use:**
+**ModuleNotFoundError:**
 ```bash
-lsof -ti:8000 | xargs kill -9
+# Make sure PYTHONPATH is set
+PYTHONPATH=/Users/michaelkwan/Documents/sleeper-analysis/src uv run python generate_reports.py
 ```
 
-**CORS errors:**
-- Make sure API is running on port 8000
-- Check browser console for actual error
+**Old data showing:**
+- Delete `docs/*.html` files and regenerate
 
-**Module not found:**
-- Make sure PYTHONPATH is set correctly
-- Try: `uv sync` to reinstall dependencies
+**Styling broken:**
+- Check that CSS is embedded in the HTML template
+- Look at `generate_reports.py` template strings
+
+## Pro Tips
+
+- Use `grep` to find field names in models: `grep -r "class.*BaseModel" src/sleeper_analytics/models/`
+- Check API responses: Look at the service code to see what data structure is returned
+- Test edge cases: Use leagues with different sizes, settings, weeks played
+- Keep `leagues.json` gitignored so you can add test leagues freely
