@@ -92,11 +92,20 @@ class FAABService:
                 current_owner = new_owner
                 current_period_start = txn.week
 
-                # Extract FAAB spent (if waiver)
+                # Extract FAAB spent (if waiver AND successful)
                 faab_spent = 0
                 if txn.is_waiver and txn.settings:
-                    # FAAB bid is stored in settings, not waiver_budget
-                    faab_spent = txn.settings.get('waiver_bid', 0)
+                    # Only count SUCCESSFUL waiver claims
+                    # Failed claims have metadata indicating failure
+                    is_successful = True
+                    if txn.metadata and txn.metadata.get('notes'):
+                        notes = txn.metadata['notes'].lower()
+                        if 'claimed by another' in notes or 'failed' in notes or 'too many' in notes:
+                            is_successful = False
+
+                    if is_successful:
+                        # FAAB bid is stored in settings, not waiver_budget
+                        faab_spent = txn.settings.get('waiver_bid', 0)
 
             # Check if this player was dropped
             elif txn.drops and player_id in txn.drops:
@@ -207,11 +216,19 @@ class FAABService:
             # Check if this owner acquired any players
             for player_id, acquiring_roster in txn.adds.items():
                 if acquiring_roster == roster_id:
-                    # Determine FAAB spent
+                    # Determine FAAB spent (only for SUCCESSFUL waivers)
                     faab = 0
                     if txn.is_waiver and txn.settings:
-                        # FAAB bid is stored in settings, not waiver_budget
-                        faab = txn.settings.get('waiver_bid', 0)
+                        # Only count SUCCESSFUL waiver claims
+                        is_successful = True
+                        if txn.metadata and txn.metadata.get('notes'):
+                            notes = txn.metadata['notes'].lower()
+                            if 'claimed by another' in notes or 'failed' in notes or 'too many' in notes:
+                                is_successful = False
+
+                        if is_successful:
+                            # FAAB bid is stored in settings, not waiver_budget
+                            faab = txn.settings.get('waiver_bid', 0)
 
                     if faab > 0:  # Only track FAAB pickups, not free agents
                         acquisitions.append({
