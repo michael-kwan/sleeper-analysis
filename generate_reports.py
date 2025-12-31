@@ -15,6 +15,7 @@ from pathlib import Path
 
 from sleeper_analytics.clients.sleeper import LeagueContext, SleeperClient
 from sleeper_analytics.services.benchwarmer import BenchwarmerService
+from sleeper_analytics.services.draft import DraftAnalysisService
 from sleeper_analytics.services.faab import FAABService
 from sleeper_analytics.services.luck_analysis import LuckAnalysisService
 from sleeper_analytics.services.matchups import MatchupService
@@ -50,6 +51,7 @@ async def generate_league_report(league_id: str, league_name: str, season: int):
         faab_service = FAABService(client, ctx)
         roster_construction_service = RosterConstructionService(client, ctx)
         trades_service = TransactionService(client, ctx, nfl_stats)
+        draft_service = DraftAnalysisService(client, ctx)
 
         # Fetch all data
         print(f"\n📈 Fetching analytics data (weeks 1-{weeks})...\n")
@@ -75,9 +77,15 @@ async def generate_league_report(league_id: str, league_name: str, season: int):
         print("   🤝 Fetching trade analysis...")
         trades = await trades_service.get_lopsided_trades_report(weeks)
 
+        print("   🎓 Fetching draft analysis...")
+        draft = await draft_service.analyze_draft(weeks)
+
+        print("   📋 Fetching transaction activity...")
+        transactions = await client.get_all_transactions(ctx.league_id, weeks)
+
         # Generate HTML
         print("\n📝 Generating HTML report...")
-        html = generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_construction, trades, weeks)
+        html = generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_construction, trades, draft, transactions, weeks)
 
         # Save to file
         output_dir = Path("docs")
@@ -93,16 +101,34 @@ async def generate_league_report(league_id: str, league_name: str, season: int):
         return output_path
 
 
-def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_construction, trades, weeks):
+def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_construction, trades, draft, transactions, weeks):
     """Generate HTML report with all analytics."""
     # Create summary stats
     total_teams = len(ctx.rosters)
     total_faab_spent = faab.total_faab_spent if faab else 0
 
+    # Calculate transaction activity breakdown
+    from collections import defaultdict
+    transaction_counts = defaultdict(lambda: {'trades': 0, 'waivers': 0, 'free_agents': 0, 'total': 0})
+
+    for txn in transactions:
+        if txn.adds:
+            for player_id, roster_id in txn.adds.items():
+                if txn.type == 'trade':
+                    transaction_counts[roster_id]['trades'] += 1
+                    transaction_counts[roster_id]['total'] += 1
+                elif txn.is_waiver:
+                    transaction_counts[roster_id]['waivers'] += 1
+                    transaction_counts[roster_id]['total'] += 1
+                else:
+                    transaction_counts[roster_id]['free_agents'] += 1
+                    transaction_counts[roster_id]['total'] += 1
+
     # Generate charts
     roster_construction_chart = generate_roster_construction_chart(roster_construction)
     luck_chart = generate_luck_chart(luck)
     trades_chart = generate_trades_chart(trades) if trades.total_trades > 0 else None
+    draft_chart = generate_draft_chart(draft)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -486,8 +512,8 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                 <thead>
                     <tr>
                         <th>Week</th>
-                        <th>Winner</th>
-                        <th>Loser</th>
+                        <th>Winner (Players Received)</th>
+                        <th>Loser (Players Received)</th>
                         <th>Point Differential</th>
                         <th>Lopsidedness</th>
                     </tr>
@@ -496,8 +522,18 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                     {''.join(f"""
                     <tr>
                         <td>{trade.week}</td>
-                        <td><strong>{trade.winner}</strong></td>
-                        <td>{trade.loser}</td>
+                        <td>
+                            <strong>{trade.winner}</strong><br>
+                            <span style="color: #94a3b8; font-size: 0.85em;">
+                                {'<br>'.join(f'{p.player_name} ({p.position}): {p.points_after_trade:.1f} pts' for p in (trade.team_a_players if trade.winner == trade.team_a else trade.team_b_players))}
+                            </span>
+                        </td>
+                        <td>
+                            <strong>{trade.loser}</strong><br>
+                            <span style="color: #94a3b8; font-size: 0.85em;">
+                                {'<br>'.join(f'{p.player_name} ({p.position}): {p.points_after_trade:.1f} pts' for p in (trade.team_b_players if trade.winner == trade.team_a else trade.team_a_players))}
+                            </span>
+                        </td>
                         <td class="highlight">+{trade.point_differential:.1f}</td>
                         <td class="{'lowlight' if trade.lopsidedness_rating == 'Extremely Lopsided' else ''}">{trade.lopsidedness_rating}</td>
                     </tr>
@@ -505,6 +541,104 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                 </tbody>
             </table>
         ''' + '</div>' if trades.total_trades > 0 else ''}
+
+        <!-- Draft Analysis -->
+        <div class="section">
+            <h2><span class="emoji">🎓</span>Draft Analysis</h2>
+            <p><strong>Best Drafter:</strong> <span class="highlight">{draft.best_drafter}</span> ({draft.best_drafter_avg_ppick:.1f} pts/pick)</p>
+            <p><strong>Worst Drafter:</strong> <span class="lowlight">{draft.worst_drafter}</span> ({draft.worst_drafter_avg_ppick:.1f} pts/pick)</p>
+            <p><strong>League Average:</strong> {draft.league_avg_points_per_pick:.1f} pts/pick</p>
+
+            <div style="margin-top: 30px;">
+                {draft_chart}
+            </div>
+
+            <h3 style="margin-top: 40px; color: #10b981;">Top 5 Best Picks (vs Expected)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Pick #</th>
+                        <th>Player</th>
+                        <th>Team</th>
+                        <th>Position</th>
+                        <th>Points</th>
+                        <th>PPG</th>
+                        <th>Rating</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(f"""
+                    <tr>
+                        <td>{pick.pick_number}</td>
+                        <td><strong>{pick.player_name}</strong></td>
+                        <td>{pick.team_name}</td>
+                        <td>{pick.position}</td>
+                        <td class="highlight">{pick.points_scored:.1f}</td>
+                        <td>{pick.points_per_game:.1f}</td>
+                        <td><span style="color: #10b981;">{pick.value_rating}</span></td>
+                    </tr>
+                    """ for pick in sorted([p for team in draft.team_grades for p in team.picks], key=lambda x: x.points_scored / (x.pick_number + 1), reverse=True)[:5])}
+                </tbody>
+            </table>
+
+            <h3 style="margin-top: 40px; color: #f87171;">Top 5 Worst Picks (vs Expected)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Pick #</th>
+                        <th>Player</th>
+                        <th>Team</th>
+                        <th>Position</th>
+                        <th>Points</th>
+                        <th>PPG</th>
+                        <th>Rating</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(f"""
+                    <tr>
+                        <td>{pick.pick_number}</td>
+                        <td><strong>{pick.player_name}</strong></td>
+                        <td>{pick.team_name}</td>
+                        <td>{pick.position}</td>
+                        <td class="lowlight">{pick.points_scored:.1f}</td>
+                        <td>{pick.points_per_game:.1f}</td>
+                        <td><span style="color: #f87171;">{pick.value_rating}</span></td>
+                    </tr>
+                    """ for pick in sorted([p for team in draft.team_grades for p in team.picks if p.pick_number <= 60], key=lambda x: x.points_scored / max(61 - x.pick_number, 1))[:5])}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Transaction Activity -->
+        <div class="section">
+            <h2><span class="emoji">📋</span>Transaction Activity</h2>
+            <p style="color: #94a3b8; margin-bottom: 20px;">Who made the most moves?</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Team</th>
+                        <th>Total Moves</th>
+                        <th>Trades</th>
+                        <th>Waivers</th>
+                        <th>Free Agents</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(f"""
+                    <tr>
+                        <td>{idx + 1}</td>
+                        <td><strong>{ctx.get_team_name(roster_id)}</strong></td>
+                        <td class="highlight">{counts['total']}</td>
+                        <td>{counts['trades']}</td>
+                        <td>{counts['waivers']}</td>
+                        <td>{counts['free_agents']}</td>
+                    </tr>
+                    """ for idx, (roster_id, counts) in enumerate(sorted(transaction_counts.items(), key=lambda x: x[1]['total'], reverse=True)))}
+                </tbody>
+            </table>
+        </div>
 
         <div class="footer">
             <p>Generated with <a href="https://github.com/anthropics/claude-code" style="color: #60a5fa;">Claude Code</a></p>
@@ -818,6 +952,84 @@ def generate_roster_construction_chart(roster_construction):
     return fig.to_html(full_html=False, include_plotlyjs='cdn')
 
 
+def generate_draft_chart(draft):
+    """Generate scatter plot with trend line for draft picks."""
+    import plotly.graph_objects as go
+    import numpy as np
+
+    # Collect all picks with their actual points
+    pick_numbers = []
+    actual_points = []
+    player_names = []
+    teams = []
+    value_ratings = []
+
+    for team_grade in draft.team_grades:
+        for pick in team_grade.picks:
+            pick_numbers.append(pick.pick_number)
+            actual_points.append(pick.points_scored)
+            player_names.append(pick.player_name)
+            teams.append(pick.team_name)
+            value_ratings.append(pick.value_rating)
+
+    # Calculate expected points (trend line using polynomial fit)
+    if len(pick_numbers) > 0:
+        z = np.polyfit(pick_numbers, actual_points, 2)  # 2nd degree polynomial
+        p = np.poly1d(z)
+        pick_range = np.linspace(min(pick_numbers), max(pick_numbers), 100)
+        expected_points = p(pick_range)
+
+    # Create color mapping for value ratings
+    color_map = {'Hit': '#10b981', 'Solid': '#fbbf24', 'Bust': '#f87171'}
+    colors = [color_map.get(rating, '#64748b') for rating in value_ratings]
+
+    fig = go.Figure()
+
+    # Add expected points trend line
+    if len(pick_numbers) > 0:
+        fig.add_trace(go.Scatter(
+            x=pick_range,
+            y=expected_points,
+            mode='lines',
+            name='Expected Points',
+            line=dict(color='#94a3b8', width=3, dash='dash'),
+            hoverinfo='skip'
+        ))
+
+    # Add actual picks as scatter points
+    fig.add_trace(go.Scatter(
+        x=pick_numbers,
+        y=actual_points,
+        mode='markers',
+        name='Actual Points',
+        marker=dict(size=10, color=colors, line=dict(color='#ffffff', width=1)),
+        text=[f"{name}<br>{team}<br>{rating}" for name, team, rating in zip(player_names, teams, value_ratings)],
+        hovertemplate='<b>Pick %{x}</b><br>%{text}<br>Points: %{y:.1f}<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title='Draft Pick Performance: Expected vs Actual Points',
+        xaxis=dict(
+            title='Pick Number',
+            gridcolor='#374151',
+            gridwidth=1
+        ),
+        yaxis=dict(
+            title='Points Scored',
+            gridcolor='#374151',
+            gridwidth=1
+        ),
+        plot_bgcolor='rgba(15, 23, 42, 0.8)',
+        paper_bgcolor='rgba(15, 23, 42, 0)',
+        font=dict(color='#e2e8f0'),
+        height=500,
+        showlegend=True,
+        hovermode='closest'
+    )
+
+    return fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+
 def generate_trades_chart(trades):
     """Generate bar chart for lopsided trades."""
     import plotly.graph_objects as go
@@ -878,7 +1090,7 @@ def generate_luck_chart(luck):
             x=[expected_wins[i], actual_wins[i]],
             y=[i, i],
             mode='lines',
-            line=dict(color='#64748b', width=2),
+            line=dict(color='#ffffff', width=2),
             showlegend=False,
             hoverinfo='skip'
         ))
@@ -907,18 +1119,25 @@ def generate_luck_chart(luck):
 
     fig.update_layout(
         title='Actual vs Expected Wins (Sorted by Actual Wins)',
-        xaxis=dict(title='Wins'),
+        xaxis=dict(
+            title='Wins',
+            gridcolor='#374151',  # Grey grid lines
+            gridwidth=1
+        ),
         yaxis=dict(
             tickmode='array',
             tickvals=list(range(len(teams))),
             ticktext=teams,
-            title=''
+            title='',
+            gridcolor='#374151',  # Grey grid lines
+            gridwidth=1
         ),
         plot_bgcolor='rgba(15, 23, 42, 0.8)',
         paper_bgcolor='rgba(15, 23, 42, 0)',
         font=dict(color='#e2e8f0'),
         height=500,
-        hovermode='x unified'
+        hovermode='x unified',
+        showlegend=True
     )
 
     return fig.to_html(full_html=False, include_plotlyjs='cdn')
