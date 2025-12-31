@@ -15,6 +15,7 @@ from sleeper_analytics.api.dependencies import (
     WeeksQuery,
 )
 from sleeper_analytics.models import TradeAnalysis
+from sleeper_analytics.models.lopsided_trades import LopsidedTradesReport
 from sleeper_analytics.services.trades import TransactionService
 
 router = APIRouter()
@@ -187,3 +188,20 @@ async def get_trade_summary(
         "biggest_winner": winners_losers["winners"][0] if winners_losers["winners"] else None,
         "biggest_loser": winners_losers["losers"][-1] if winners_losers["losers"] else None,
     }
+
+
+@router.get(
+    "/{league_id}/lopsided",
+    response_model=LopsidedTradesReport,
+    summary="Get lopsided trades analysis",
+    description="Identify the most one-sided trades based on post-trade point performance.",
+)
+async def get_lopsided_trades(
+    ctx: LeagueContextDep,
+    client: SleeperClientDep,
+    nfl_stats: NFLStatsDep,
+    weeks: WeeksQuery = 18,
+) -> LopsidedTradesReport:
+    """Analyze trades to find the most lopsided based on results."""
+    service = TransactionService(client, ctx, nfl_stats)
+    return await service.get_lopsided_trades_report(weeks)

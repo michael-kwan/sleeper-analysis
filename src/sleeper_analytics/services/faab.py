@@ -94,11 +94,9 @@ class FAABService:
 
                 # Extract FAAB spent (if waiver)
                 faab_spent = 0
-                if txn.is_waiver and txn.waiver_budget:
-                    for wb in txn.waiver_budget:
-                        if wb.receiver == new_owner:
-                            faab_spent = wb.amount
-                            break
+                if txn.is_waiver and txn.settings:
+                    # FAAB bid is stored in settings, not waiver_budget
+                    faab_spent = txn.settings.get('waiver_bid', 0)
 
             # Check if this player was dropped
             elif txn.drops and player_id in txn.drops:
@@ -211,11 +209,9 @@ class FAABService:
                 if acquiring_roster == roster_id:
                     # Determine FAAB spent
                     faab = 0
-                    if txn.is_waiver and txn.waiver_budget:
-                        for wb in txn.waiver_budget:
-                            if wb.receiver == roster_id:
-                                faab = wb.amount
-                                break
+                    if txn.is_waiver and txn.settings:
+                        # FAAB bid is stored in settings, not waiver_budget
+                        faab = txn.settings.get('waiver_bid', 0)
 
                     if faab > 0:  # Only track FAAB pickups, not free agents
                         acquisitions.append({

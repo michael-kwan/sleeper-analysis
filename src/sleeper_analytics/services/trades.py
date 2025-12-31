@@ -583,3 +583,218 @@ class TransactionService:
             "current_owner": self.ctx.get_team_name(current_owner) if current_owner else "Free Agent",
             "ownership_chain": ownership_chain,
         }
+
+    async def get_lopsided_trades_report(
+        self, weeks: int = 18
+    ) -> "LopsidedTradesReport":
+        """
+        Analyze trades to find the most lopsided based on post-trade performance.
+
+        Args:
+            weeks: Number of weeks to analyze
+
+        Returns:
+            LopsidedTradesReport with most one-sided trades
+        """
+        from sleeper_analytics.models.lopsided_trades import (
+            LopsidedTrade,
+            LopsidedTradesReport,
+            TradePlayer,
+        )
+
+        # Get all transactions
+        all_transactions = await self.client.get_all_transactions(
+            self.ctx.league_id, weeks
+        )
+
+        # Filter for trades only
+        trades = [txn for txn in all_transactions if txn.is_trade]
+
+        if not trades:
+            # Return empty report
+            return LopsidedTradesReport(
+                league_id=self.ctx.league_id,
+                league_name=self.ctx.league_name,
+                weeks_analyzed=weeks,
+                total_trades=0,
+                most_lopsided_trades=[],
+                biggest_trade_winner="N/A",
+                biggest_trade_winner_differential=0.0,
+                biggest_trade_loser="N/A",
+                biggest_trade_loser_differential=0.0,
+                best_overall_trader="N/A",
+                best_overall_trader_net_points=0.0,
+                worst_overall_trader="N/A",
+                worst_overall_trader_net_points=0.0,
+            )
+
+        # Get matchups for point tracking
+        matchups_by_week = await self.client.get_matchups_range(
+            self.ctx.league_id, 1, weeks
+        )
+
+        # Analyze each trade
+        lopsided_trades: list[LopsidedTrade] = []
+        team_trade_performance: dict[int, float] = defaultdict(float)
+
+        for trade in trades:
+            trade_week = trade.week
+
+            if not trade.roster_ids or len(trade.roster_ids) != 2:
+                continue  # Skip multi-team trades
+
+            team_a_roster_id = trade.roster_ids[0]
+            team_b_roster_id = trade.roster_ids[1]
+
+            team_a_name = self.ctx.get_team_name(team_a_roster_id)
+            team_b_name = self.ctx.get_team_name(team_b_roster_id)
+
+            # Determine who gave what
+            team_a_gave: list[str] = []
+            team_b_gave: list[str] = []
+
+            if trade.adds:
+                for player_id, receiving_roster in trade.adds.items():
+                    if receiving_roster == team_a_roster_id:
+                        team_b_gave.append(player_id)  # Team B gave this to Team A
+                    elif receiving_roster == team_b_roster_id:
+                        team_a_gave.append(player_id)  # Team A gave this to Team B
+
+            # Calculate points scored after the trade
+            def get_points_after_trade(player_id: str, after_week: int) -> tuple[float, int]:
+                """Get total points and weeks played after the trade."""
+                total_points = 0.0
+                weeks_played = 0
+
+                for week in range(after_week + 1, weeks + 1):
+                    matchups = matchups_by_week.get(week, [])
+                    for matchup in matchups:
+                        players_points = matchup.get("players_points", {})
+                        if player_id in players_points:
+                            total_points += float(players_points[player_id])
+                            weeks_played += 1
+                            break
+
+                return total_points, weeks_played
+
+            # Analyze Team A's received players
+            team_a_players: list[TradePlayer] = []
+            team_a_total_points = 0.0
+
+            for player_id in team_b_gave:
+                points, weeks_after = get_points_after_trade(player_id, trade_week)
+                ppw = points / weeks_after if weeks_after > 0 else 0
+
+                team_a_players.append(
+                    TradePlayer(
+                        player_id=player_id,
+                        player_name=self.ctx.get_player_name(player_id),
+                        position=self.ctx.get_player_position(player_id),
+                        from_team=team_b_name,
+                        to_team=team_a_name,
+                        points_after_trade=round(points, 2),
+                        weeks_after_trade=weeks_after,
+                        ppw_after_trade=round(ppw, 2),
+                    )
+                )
+                team_a_total_points += points
+
+            # Analyze Team B's received players
+            team_b_players: list[TradePlayer] = []
+            team_b_total_points = 0.0
+
+            for player_id in team_a_gave:
+                points, weeks_after = get_points_after_trade(player_id, trade_week)
+                ppw = points / weeks_after if weeks_after > 0 else 0
+
+                team_b_players.append(
+                    TradePlayer(
+                        player_id=player_id,
+                        player_name=self.ctx.get_player_name(player_id),
+                        position=self.ctx.get_player_position(player_id),
+                        from_team=team_a_name,
+                        to_team=team_b_name,
+                        points_after_trade=round(points, 2),
+                        weeks_after_trade=weeks_after,
+                        ppw_after_trade=round(ppw, 2),
+                    )
+                )
+                team_b_total_points += points
+
+            # Calculate differential
+            differential = abs(team_a_total_points - team_b_total_points)
+
+            if team_a_total_points > team_b_total_points:
+                winner = team_a_name
+                loser = team_b_name
+                team_trade_performance[team_a_roster_id] += differential
+                team_trade_performance[team_b_roster_id] -= differential
+            else:
+                winner = team_b_name
+                loser = team_a_name
+                team_trade_performance[team_b_roster_id] += differential
+                team_trade_performance[team_a_roster_id] -= differential
+
+            # Classify lopsidedness
+            if differential >= 100:
+                lopsidedness = "Extremely Lopsided"
+            elif differential >= 50:
+                lopsidedness = "Lopsided"
+            elif differential >= 20:
+                lopsidedness = "Slightly Lopsided"
+            else:
+                lopsidedness = "Fairly Even"
+
+            lopsided_trades.append(
+                LopsidedTrade(
+                    transaction_id=trade.transaction_id,
+                    week=trade_week,
+                    team_a=team_a_name,
+                    team_b=team_b_name,
+                    team_a_players=team_a_players,
+                    team_b_players=team_b_players,
+                    team_a_points_received=round(team_a_total_points, 2),
+                    team_b_points_received=round(team_b_total_points, 2),
+                    point_differential=round(differential, 2),
+                    winner=winner,
+                    loser=loser,
+                    lopsidedness_rating=lopsidedness,
+                )
+            )
+
+        # Sort by differential
+        lopsided_trades.sort(key=lambda t: t.point_differential, reverse=True)
+
+        # Top 10 most lopsided
+        most_lopsided = lopsided_trades[:10]
+
+        # Biggest single trade winner/loser
+        biggest_trade = lopsided_trades[0] if lopsided_trades else None
+
+        # Best/worst overall traders
+        best_trader_roster_id = max(
+            team_trade_performance.keys(),
+            key=lambda k: team_trade_performance[k],
+            default=None
+        )
+        worst_trader_roster_id = min(
+            team_trade_performance.keys(),
+            key=lambda k: team_trade_performance[k],
+            default=None
+        )
+
+        return LopsidedTradesReport(
+            league_id=self.ctx.league_id,
+            league_name=self.ctx.league_name,
+            weeks_analyzed=weeks,
+            total_trades=len(trades),
+            most_lopsided_trades=most_lopsided,
+            biggest_trade_winner=biggest_trade.winner if biggest_trade else "N/A",
+            biggest_trade_winner_differential=biggest_trade.point_differential if biggest_trade else 0.0,
+            biggest_trade_loser=biggest_trade.loser if biggest_trade else "N/A",
+            biggest_trade_loser_differential=biggest_trade.point_differential if biggest_trade else 0.0,
+            best_overall_trader=self.ctx.get_team_name(best_trader_roster_id) if best_trader_roster_id else "N/A",
+            best_overall_trader_net_points=round(team_trade_performance[best_trader_roster_id], 2) if best_trader_roster_id else 0.0,
+            worst_overall_trader=self.ctx.get_team_name(worst_trader_roster_id) if worst_trader_roster_id else "N/A",
+            worst_overall_trader_net_points=round(team_trade_performance[worst_trader_roster_id], 2) if worst_trader_roster_id else 0.0,
+        )
