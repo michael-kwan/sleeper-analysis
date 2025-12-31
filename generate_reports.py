@@ -127,7 +127,7 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
     # Generate charts
     roster_construction_chart = generate_roster_construction_chart(roster_construction)
     luck_chart = generate_luck_chart(luck)
-    draft_chart = generate_draft_chart(draft)
+    draft_chart, best_picks, worst_picks = generate_draft_chart(draft)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -548,7 +548,7 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                 {draft_chart}
             </div>
 
-            <h3 style="margin-top: 40px; color: #10b981;">Top 5 Best Picks (vs Expected)</h3>
+            <h3 style="margin-top: 40px; color: #10b981;">Top 5 Best Picks (Most Above Expected)</h3>
             <table>
                 <thead>
                     <tr>
@@ -556,27 +556,27 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                         <th>Player</th>
                         <th>Team</th>
                         <th>Position</th>
-                        <th>Points</th>
-                        <th>PPG</th>
-                        <th>Rating</th>
+                        <th>Actual Points</th>
+                        <th>Expected Points</th>
+                        <th>Difference</th>
                     </tr>
                 </thead>
                 <tbody>
                     {''.join(f"""
                     <tr>
-                        <td>{pick.pick_number}</td>
-                        <td><strong>{pick.player_name}</strong></td>
-                        <td>{pick.team_name}</td>
-                        <td>{pick.position}</td>
-                        <td class="highlight">{pick.points_scored:.1f}</td>
-                        <td>{pick.points_per_game:.1f}</td>
-                        <td><span style="color: #10b981;">{pick.value_rating}</span></td>
+                        <td>{p['pick'].pick_number}</td>
+                        <td><strong>{p['pick'].player_name}</strong></td>
+                        <td>{p['pick'].team_name}</td>
+                        <td>{p['pick'].position}</td>
+                        <td class="highlight">{p['pick'].points_scored:.1f}</td>
+                        <td>{p['expected']:.1f}</td>
+                        <td class="highlight">+{p['diff']:.1f}</td>
                     </tr>
-                    """ for pick in sorted([p for team in draft.team_grades for p in team.picks], key=lambda x: x.points_scored / (x.pick_number + 1), reverse=True)[:5])}
+                    """ for p in best_picks)}
                 </tbody>
             </table>
 
-            <h3 style="margin-top: 40px; color: #f87171;">Top 5 Worst Picks (vs Expected)</h3>
+            <h3 style="margin-top: 40px; color: #f87171;">Top 5 Worst Picks (Most Below Expected)</h3>
             <table>
                 <thead>
                     <tr>
@@ -584,23 +584,23 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                         <th>Player</th>
                         <th>Team</th>
                         <th>Position</th>
-                        <th>Points</th>
-                        <th>PPG</th>
-                        <th>Rating</th>
+                        <th>Actual Points</th>
+                        <th>Expected Points</th>
+                        <th>Difference</th>
                     </tr>
                 </thead>
                 <tbody>
                     {''.join(f"""
                     <tr>
-                        <td>{pick.pick_number}</td>
-                        <td><strong>{pick.player_name}</strong></td>
-                        <td>{pick.team_name}</td>
-                        <td>{pick.position}</td>
-                        <td class="lowlight">{pick.points_scored:.1f}</td>
-                        <td>{pick.points_per_game:.1f}</td>
-                        <td><span style="color: #f87171;">{pick.value_rating}</span></td>
+                        <td>{p['pick'].pick_number}</td>
+                        <td><strong>{p['pick'].player_name}</strong></td>
+                        <td>{p['pick'].team_name}</td>
+                        <td>{p['pick'].position}</td>
+                        <td class="lowlight">{p['pick'].points_scored:.1f}</td>
+                        <td>{p['expected']:.1f}</td>
+                        <td class="lowlight">{p['diff']:.1f}</td>
                     </tr>
-                    """ for pick in sorted([p for team in draft.team_grades for p in team.picks if p.pick_number <= 60], key=lambda x: x.points_scored / max(61 - x.pick_number, 1))[:5])}
+                    """ for p in worst_picks)}
                 </tbody>
             </table>
         </div>
@@ -958,6 +958,7 @@ def generate_draft_chart(draft):
     player_names = []
     teams = []
     value_ratings = []
+    all_picks = []
 
     for team_grade in draft.team_grades:
         for pick in team_grade.picks:
@@ -966,13 +967,18 @@ def generate_draft_chart(draft):
             player_names.append(pick.player_name)
             teams.append(pick.team_name)
             value_ratings.append(pick.value_rating)
+            all_picks.append(pick)
 
     # Calculate expected points (trend line using polynomial fit)
+    # Use 2nd degree polynomial for smoother curve
     if len(pick_numbers) > 0:
-        z = np.polyfit(pick_numbers, actual_points, 2)  # 2nd degree polynomial
+        z = np.polyfit(pick_numbers, actual_points, 2)
         p = np.poly1d(z)
         pick_range = np.linspace(min(pick_numbers), max(pick_numbers), 100)
         expected_points = p(pick_range)
+
+        # Calculate expected points for each actual pick
+        expected_by_pick = {pnum: p(pnum) for pnum in pick_numbers}
 
     # Create color mapping for value ratings
     color_map = {'Hit': '#10b981', 'Solid': '#fbbf24', 'Bust': '#f87171'}
@@ -1022,7 +1028,26 @@ def generate_draft_chart(draft):
         hovermode='closest'
     )
 
-    return fig.to_html(full_html=False, include_plotlyjs='cdn')
+    # Calculate best and worst picks based on distance from expected
+    pick_analysis = []
+    for pick in all_picks:
+        expected = expected_by_pick.get(pick.pick_number, 0)
+        diff = pick.points_scored - expected
+        pick_analysis.append({
+            'pick': pick,
+            'expected': expected,
+            'diff': diff
+        })
+
+    # Best picks = most above expected (positive difference)
+    best_5 = sorted(pick_analysis, key=lambda x: x['diff'], reverse=True)[:5]
+
+    # Worst picks = most below expected (negative difference)
+    # Only consider early picks (first 5 rounds = 60 picks in 12-team)
+    early_picks = [p for p in pick_analysis if p['pick'].pick_number <= 60]
+    worst_5 = sorted(early_picks, key=lambda x: x['diff'])[:5]
+
+    return fig.to_html(full_html=False, include_plotlyjs='cdn'), best_5, worst_5
 
 
 def generate_luck_chart(luck):
