@@ -395,11 +395,13 @@
 
                 // Render charts after content is loaded
                 await updateStatus('📊 Rendering charts...');
-                renderStandingsChart(standings);
-                renderWeeklyScoresChart(awards);
-                renderLuckScatterChart(luck);
-                renderFAABChart(faab);
-                renderBenchwarmerChart(benchwarmers);
+                setTimeout(() => {
+                    renderStandingsChart(standings);
+                    renderWeeklyScoresChart(awards);
+                    renderLuckScatterChart(luck);
+                    renderFAABChart(faab);
+                    renderBenchwarmerChart(benchwarmers);
+                }, 100);
 
             } catch (error) {
                 console.error('Error generating report:', error);
@@ -443,7 +445,7 @@
             const chartDiv = document.createElement('div');
             chartDiv.className = 'chart-container';
             chartDiv.innerHTML = '<div id="standings-chart" class="chart"></div>';
-            document.querySelector('.section:nth-of-type(2)').after(chartDiv);
+            document.getElementById('content').appendChild(chartDiv);
 
             Plotly.newPlot('standings-chart', [trace1, trace2], layout, {responsive: true});
         }
@@ -485,7 +487,7 @@
             const chartDiv = document.createElement('div');
             chartDiv.className = 'chart-container';
             chartDiv.innerHTML = '<div id="weekly-chart" class="chart"></div>';
-            document.querySelector('.section:nth-of-type(3)').after(chartDiv);
+            document.getElementById('content').appendChild(chartDiv);
 
             Plotly.newPlot('weekly-chart', [trace1, trace2], layout, {responsive: true});
         }
@@ -531,7 +533,7 @@
             const chartDiv = document.createElement('div');
             chartDiv.className = 'chart-container';
             chartDiv.innerHTML = '<div id="luck-chart" class="chart"></div>';
-            document.querySelector('.section:nth-of-type(4)').after(chartDiv);
+            document.getElementById('content').appendChild(chartDiv);
 
             Plotly.newPlot('luck-chart', [trace], layout, {responsive: true});
         }
@@ -567,7 +569,7 @@
             const chartDiv = document.createElement('div');
             chartDiv.className = 'chart-container';
             chartDiv.innerHTML = '<div id="faab-chart" class="chart"></div>';
-            document.querySelector('.section:nth-of-type(5)').after(chartDiv);
+            document.getElementById('content').appendChild(chartDiv);
 
             Plotly.newPlot('faab-chart', [trace], layout, {responsive: true});
         }
@@ -597,7 +599,7 @@
             const chartDiv = document.createElement('div');
             chartDiv.className = 'chart-container';
             chartDiv.innerHTML = '<div id="benchwarmer-chart" class="chart"></div>';
-            document.querySelector('.section:last-of-type').after(chartDiv);
+            document.getElementById('content').appendChild(chartDiv);
 
             Plotly.newPlot('benchwarmer-chart', [trace], layout, {responsive: true});
         }

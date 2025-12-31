@@ -3,283 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sleeper Fantasy Football Analytics</title>
+    <title>Sleeper Analytics</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
-            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            padding: 40px 20px;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
         }
 
         .container {
-            max-width: 600px;
-            width: 100%;
-        }
-
-        .hero {
+            max-width: 800px;
             text-align: center;
-            margin-bottom: 40px;
         }
 
-        .hero h1 {
+        h1 {
             font-size: 3em;
-            margin-bottom: 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin-bottom: 20px;
+            background: linear-gradient(to right, #60a5fa, #a78bfa);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
 
-        .hero p {
+        .subtitle {
+            color: #94a3b8;
             font-size: 1.2em;
-            color: rgba(255, 255, 255, 0.8);
-            line-height: 1.6;
+            margin-bottom: 50px;
         }
 
-        .card {
+        .leagues {
+            display: grid;
+            gap: 20px;
+        }
+
+        .league-card {
             background: rgba(255, 255, 255, 0.05);
-            padding: 40px;
-            border-radius: 20px;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .form-group {
-            margin-bottom: 25px;
-        }
-
-        label {
+            padding: 30px;
+            border-radius: 16px;
+            text-decoration: none;
+            color: inherit;
             display: block;
-            margin-bottom: 10px;
-            font-weight: 600;
-            color: #667eea;
-            font-size: 0.95em;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        input[type="text"] {
-            width: 100%;
-            padding: 15px 20px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            color: white;
-            font-size: 1.1em;
             transition: all 0.3s ease;
         }
 
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #667eea;
-            background: rgba(255, 255, 255, 0.12);
+        .league-card:hover {
+            transform: translateY(-5px);
+            border-color: #60a5fa;
+            box-shadow: 0 10px 40px rgba(96, 165, 250, 0.3);
         }
 
-        input[type="text"]::placeholder {
-            color: rgba(255, 255, 255, 0.4);
+        .league-name {
+            font-size: 1.8em;
+            color: #60a5fa;
+            margin-bottom: 10px;
         }
 
-        button {
-            width: 100%;
-            padding: 15px 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 10px;
-            color: white;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        .league-season {
+            color: #94a3b8;
         }
 
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        .help-text {
-            margin-top: 15px;
+        .footer {
+            margin-top: 50px;
+            color: #64748b;
             font-size: 0.9em;
-            color: rgba(255, 255, 255, 0.6);
-            line-height: 1.5;
-        }
-
-        .help-text a {
-            color: #667eea;
-            text-decoration: none;
-        }
-
-        .help-text a:hover {
-            text-decoration: underline;
-        }
-
-        .examples {
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .examples h3 {
-            font-size: 0.9em;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 15px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .example-leagues {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .example-league {
-            padding: 12px 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .example-league:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: #667eea;
-        }
-
-        .example-league .name {
-            font-weight: 600;
-            color: white;
-            margin-bottom: 5px;
-        }
-
-        .example-league .id {
-            font-size: 0.85em;
-            color: rgba(255, 255, 255, 0.5);
-            font-family: 'Courier New', monospace;
-        }
-
-        .features {
-            margin-top: 40px;
-            padding: 30px;
-            background: rgba(102, 126, 234, 0.1);
-            border-radius: 15px;
-            border: 1px solid rgba(102, 126, 234, 0.2);
-        }
-
-        .features h3 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 1.2em;
-        }
-
-        .features ul {
-            list-style: none;
-            padding: 0;
-        }
-
-        .features li {
-            padding: 8px 0;
-            color: rgba(255, 255, 255, 0.8);
-        }
-
-        .features li:before {
-            content: "✓ ";
-            color: #4ade80;
-            font-weight: bold;
-            margin-right: 10px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="hero">
-            <h1>🏈 Sleeper Analytics</h1>
-            <p>Comprehensive fantasy football analytics for your Sleeper league</p>
+        <h1>🏈 Sleeper Analytics</h1>
+        <div class="subtitle">Advanced Fantasy Football Analytics</div>
+
+        <div class="leagues">
+            
+            <a href="tip-your-runningbacks.html" class="league-card">
+                <div class="league-name">tip your runningbacks</div>
+                <div class="league-season">Season 2025</div>
+            </a>
+            
+            <a href="supa-flexas.html" class="league-card">
+                <div class="league-name">supa flexas</div>
+                <div class="league-season">Season 2025</div>
+            </a>
+            
         </div>
 
-        <div class="card">
-            <form id="league-form">
-                <div class="form-group">
-                    <label for="league-id">Enter Your League ID</label>
-                    <input
-                        type="text"
-                        id="league-id"
-                        name="league-id"
-                        placeholder="e.g., 1257152597513490432"
-                        required
-                        autocomplete="off"
-                    >
-                </div>
-
-                <button type="submit">
-                    Analyze League →
-                </button>
-
-                <div class="help-text">
-                    <strong>Where to find your League ID:</strong><br>
-                    1. Open your league in Sleeper<br>
-                    2. Look at the URL: <code>sleeper.com/leagues/<strong>1234567890</strong></code><br>
-                    3. Copy the number and paste it above
-                </div>
-            </form>
-
-            <div class="examples">
-                <h3>Example Leagues</h3>
-                <div class="example-leagues">
-                    <div class="example-league" onclick="loadLeague('1257152597513490432')">
-                        <div class="name">tip your runningbacks</div>
-                        <div class="id">1257152597513490432</div>
-                    </div>
-                    <div class="example-league" onclick="loadLeague('1261570852047040512')">
-                        <div class="name">supa flexas</div>
-                        <div class="id">1261570852047040512</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="features">
-            <h3>📊 Analytics Included</h3>
-            <ul>
-                <li>League standings with detailed records</li>
-                <li>Weekly high/low scorer tracking</li>
-                <li>Benchwarmer analysis (points left on bench)</li>
-                <li>Matchup luck & strength of schedule</li>
-                <li>FAAB efficiency & player lifecycle</li>
-                <li>Trade analysis & transaction history</li>
-            </ul>
+        <div class="footer">
+            <p>Generated with Claude Code</p>
         </div>
     </div>
-
-    <script>
-        document.getElementById('league-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const leagueId = document.getElementById('league-id').value.trim();
-            if (leagueId) {
-                window.location.href = `app.html?id=${leagueId}`;
-            }
-        });
-
-        function loadLeague(leagueId) {
-            window.location.href = `app.html?id=${leagueId}`;
-        }
-    </script>
 </body>
 </html>
