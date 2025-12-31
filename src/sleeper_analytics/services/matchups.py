@@ -451,9 +451,13 @@ class MatchupService:
             )
 
         # Calculate net payouts (high scorers get $5, low scorers pay $5)
+        # Include ALL teams in the league, even if they never got high/low scorer
         payout_by_team: dict[str, float] = {}
 
-        for team_name in set(list(high_score_counts.keys()) + list(low_score_counts.keys())):
+        # Get all team names from league context
+        all_team_names = [self.ctx.get_team_name(roster.roster_id) for roster in self.ctx.rosters]
+
+        for team_name in all_team_names:
             high_count = high_score_counts.get(team_name, 0)
             low_count = low_score_counts.get(team_name, 0)
             net_payout = (high_count * 5.0) - (low_count * 5.0)

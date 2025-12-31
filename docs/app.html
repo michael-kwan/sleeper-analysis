@@ -267,16 +267,23 @@
                 // Fetch all data concurrently
                 await updateStatus('🔄 Fetching all analytics data...');
 
-                const [standings, awards, benchwarmers, luck, faab, rosterConstruction, draft, trades] = await Promise.all([
+                const [standings, awards, benchwarmers, luck, faab, rosterConstruction, draft, lopsidedTrades, transactionActivity] = await Promise.all([
                     fetchAPI(`/api/matchups/${leagueId}/standings?weeks=14`),
                     fetchAPI(`/api/awards/${leagueId}/season?weeks=14`),
                     fetchAPI(`/api/benchwarmer/${leagueId}/league?weeks=14`),
                     fetchAPI(`/api/luck/${leagueId}/league?weeks=14`),
                     fetchAPI(`/api/faab/${leagueId}/report?weeks=14`),
-                    fetchAPI(`/api/roster-construction/${leagueId}/report?weeks=14`),
+                    fetchAPI(`/api/roster-construction/${leagueId}/league?weeks=14`),
                     fetchAPI(`/api/draft/${leagueId}/analysis?weeks=14`),
-                    fetchAPI(`/api/trades/${leagueId}/report?weeks=14`)
+                    fetchAPI(`/api/trades/${leagueId}/lopsided?weeks=14`),
+                    fetchAPI(`/api/transactions/${leagueId}/activity?weeks=14`)
                 ]);
+
+                // Combine trades data
+                const trades = {
+                    most_lopsided_trades: lopsidedTrades.trades || [],
+                    transaction_activity: transactionActivity.team_activity || []
+                };
 
                 await updateStatus('📝 Generating comprehensive report...');
 
