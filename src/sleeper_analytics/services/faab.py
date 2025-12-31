@@ -200,14 +200,19 @@ class FAABService:
         Returns:
             OwnerFAABPerformance with all metrics
         """
-        # Get all transactions
+        # Get actual FAAB spent from roster settings (most reliable source)
+        roster = next((r for r in self.ctx.rosters if r.roster_id == roster_id), None)
+        total_faab_spent = 0
+        if roster and roster.settings:
+            total_faab_spent = roster.settings.get('waiver_budget_used', 0)
+
+        # Get all transactions to track individual acquisitions
         all_transactions = await self.client.get_all_transactions(
             self.ctx.league_id, weeks
         )
 
-        # Track this owner's FAAB acquisitions
+        # Track this owner's FAAB acquisitions (for detailed breakdown)
         acquisitions: list[dict[str, Any]] = []
-        total_faab_spent = 0
 
         for txn in all_transactions:
             if not txn.adds:
@@ -236,7 +241,6 @@ class FAABService:
                             "week": txn.week,
                             "faab": faab,
                         })
-                        total_faab_spent += faab
 
         # Get details for each acquisition using lifecycle
         acquisition_periods: list[PlayerOwnershipPeriod] = []

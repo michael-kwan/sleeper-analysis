@@ -687,7 +687,7 @@ def generate_index(leagues):
     <script>
         function extractLeagueId(input) {{
             input = input.trim();
-            const urlMatch = input.match(/leagues\\/(\d+)/);
+            const urlMatch = input.match(/leagues\\/(\\d+)/);
             if (urlMatch) return urlMatch[1];
             if (/^\\d+$/.test(input)) return input;
             return null;
