@@ -28,10 +28,10 @@ class RosterConstructionService:
         self.client = client
         self.ctx = context
 
-    async def _get_player_points_by_week(
-        self, player_id: str, weeks: int = 17
+    async def _get_player_started_points_by_week(
+        self, player_id: str, roster_id: int, weeks: int = 17
     ) -> dict[int, float]:
-        """Get points scored by a player each week."""
+        """Get points scored by a player each week ONLY when started by this team."""
         matchups_by_week = await self.client.get_matchups_range(
             self.ctx.league_id, 1, weeks
         )
@@ -39,11 +39,19 @@ class RosterConstructionService:
         points_by_week: dict[int, float] = {}
 
         for week, matchups in matchups_by_week.items():
-            for matchup in matchups:
-                players_points = matchup.get("players_points", {})
-                if player_id in players_points:
+            # Find this team's matchup for this week
+            team_matchup = next(
+                (m for m in matchups if m.get("roster_id") == roster_id), None
+            )
+
+            if team_matchup:
+                # Check if player was in starting lineup
+                starters = team_matchup.get("starters", [])
+                players_points = team_matchup.get("players_points", {})
+
+                # Only count points if player was started
+                if player_id in starters and player_id in players_points:
                     points_by_week[week] = float(players_points[player_id])
-                    break
 
         return points_by_week
 
@@ -116,10 +124,12 @@ class RosterConstructionService:
         acquisitions: list[PlayerAcquisition] = []
 
         for player_id, acq_info in player_acquisitions.items():
-            # Get player points by week
-            points_by_week = await self._get_player_points_by_week(player_id, weeks)
+            # Get player points by week (only when started by this team)
+            points_by_week = await self._get_player_started_points_by_week(
+                player_id, roster_id, weeks
+            )
 
-            # Sum points during ownership period
+            # Sum points during ownership period (only weeks they were started)
             total_points = sum(
                 points_by_week.get(w, 0)
                 for w in range(acq_info["start_week"], acq_info["end_week"] + 1)
