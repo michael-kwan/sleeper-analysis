@@ -372,14 +372,18 @@
 
                 // Benchwarmer Report
                 html += '<div class="section"><h2>💺 Biggest Benchwarmers (Top 10)</h2><table>';
-                html += '<thead><tr><th>Team</th><th>Total Bench Points</th><th>Worst Week</th><th>Points Left</th></tr></thead><tbody>';
-                benchwarmers.team_reports.slice(0, 10).forEach(team => {
-                    const worstWeek = team.weeks.reduce((max, w) => w.total_bench_points > max.total_bench_points ? w : max);
+                html += '<thead><tr><th>Team</th><th>Total Bench Points</th><th>Avg/Week</th><th>Worst Decision</th></tr></thead><tbody>';
+                benchwarmers.all_teams.slice(0, 10).forEach(team => {
+                    const worstDecision = team.worst_benching_decision;
                     html += `<tr>`;
                     html += `<td>${team.team_name}</td>`;
                     html += `<td class="negative">${team.total_bench_points.toFixed(1)}</td>`;
-                    html += `<td>Week ${worstWeek.week}</td>`;
-                    html += `<td class="negative">${worstWeek.total_bench_points.toFixed(1)}</td>`;
+                    html += `<td class="negative">${team.avg_bench_points_per_week.toFixed(1)}</td>`;
+                    if (worstDecision) {
+                        html += `<td class="negative">${worstDecision.player_name} (${worstDecision.points.toFixed(1)} pts, Wk ${worstDecision.week})</td>`;
+                    } else {
+                        html += `<td>-</td>`;
+                    }
                     html += `</tr>`;
                 });
                 html += '</tbody></table></div>';
@@ -569,8 +573,8 @@
         }
 
         function renderBenchwarmerChart(benchwarmers) {
-            const teams = benchwarmers.team_reports.map(t => t.team_name);
-            const benchPoints = benchwarmers.team_reports.map(t => t.total_bench_points);
+            const teams = benchwarmers.all_teams.map(t => t.team_name);
+            const benchPoints = benchwarmers.all_teams.map(t => t.total_bench_points);
 
             const trace = {
                 labels: teams,
