@@ -127,7 +127,7 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
     # Generate charts
     roster_construction_chart = generate_roster_construction_chart(roster_construction)
     luck_chart = generate_luck_chart(luck)
-    draft_chart, best_picks, worst_picks = generate_draft_chart(draft)
+    draft_chart, best_picks, worst_picks, best_picks_no_qb, worst_picks_no_qb = generate_draft_chart(draft)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -547,7 +547,7 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
             <div style="margin-top: 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                     <input type="checkbox" id="excludeQBs" onchange="toggleQBs()" style="width: 18px; height: 18px; cursor: pointer;">
-                    <span style="color: #e2e8f0;">Exclude QBs from chart and tables</span>
+                    <span style="color: #e2e8f0;">Exclude QBs from tables</span>
                 </label>
             </div>
 
@@ -568,9 +568,9 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                         <th>Difference</th>
                     </tr>
                 </thead>
-                <tbody id="bestPicksTable">
+                <tbody id="bestPicksAll">
                     {''.join(f"""
-                    <tr class="draft-pick-row" data-position="{p['pick'].position}">
+                    <tr>
                         <td>{p['pick'].pick_number}</td>
                         <td><strong>{p['pick'].player_name}</strong></td>
                         <td>{p['pick'].team_name}</td>
@@ -580,6 +580,19 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                         <td class="highlight">+{p['diff']:.1f}</td>
                     </tr>
                     """ for p in best_picks)}
+                </tbody>
+                <tbody id="bestPicksNoQB" style="display: none;">
+                    {''.join(f"""
+                    <tr>
+                        <td>{p['pick'].pick_number}</td>
+                        <td><strong>{p['pick'].player_name}</strong></td>
+                        <td>{p['pick'].team_name}</td>
+                        <td>{p['pick'].position}</td>
+                        <td class="highlight">{p['pick'].points_scored:.1f}</td>
+                        <td>{p['expected']:.1f}</td>
+                        <td class="highlight">+{p['diff']:.1f}</td>
+                    </tr>
+                    """ for p in best_picks_no_qb)}
                 </tbody>
             </table>
 
@@ -596,9 +609,9 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                         <th>Difference</th>
                     </tr>
                 </thead>
-                <tbody id="worstPicksTable">
+                <tbody id="worstPicksAll">
                     {''.join(f"""
-                    <tr class="draft-pick-row" data-position="{p['pick'].position}">
+                    <tr>
                         <td>{p['pick'].pick_number}</td>
                         <td><strong>{p['pick'].player_name}</strong></td>
                         <td>{p['pick'].team_name}</td>
@@ -609,35 +622,30 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                     </tr>
                     """ for p in worst_picks)}
                 </tbody>
+                <tbody id="worstPicksNoQB" style="display: none;">
+                    {''.join(f"""
+                    <tr>
+                        <td>{p['pick'].pick_number}</td>
+                        <td><strong>{p['pick'].player_name}</strong></td>
+                        <td>{p['pick'].team_name}</td>
+                        <td>{p['pick'].position}</td>
+                        <td class="lowlight">{p['pick'].points_scored:.1f}</td>
+                        <td>{p['expected']:.1f}</td>
+                        <td class="lowlight">{p['diff']:.1f}</td>
+                    </tr>
+                    """ for p in worst_picks_no_qb)}
+                </tbody>
             </table>
 
             <script>
                 function toggleQBs() {{
                     const excludeQBs = document.getElementById('excludeQBs').checked;
 
-                    // Filter table rows
-                    const rows = document.querySelectorAll('.draft-pick-row');
-                    rows.forEach(row => {{
-                        const position = row.getAttribute('data-position');
-                        if (position === 'QB') {{
-                            row.style.display = excludeQBs ? 'none' : '';
-                        }}
-                    }});
-
-                    // Filter Plotly chart
-                    const chartDiv = document.getElementById('draftChart');
-                    if (chartDiv && chartDiv.data) {{
-                        // Find the scatter trace (index 1, index 0 is the trend line)
-                        const scatterTrace = chartDiv.data[1];
-                        if (scatterTrace && scatterTrace.customdata) {{
-                            // Create visibility array based on positions
-                            const visibility = scatterTrace.customdata.map(pos => pos !== 'QB' || !excludeQBs);
-
-                            // Update marker sizes: 0 to hide, 10 to show
-                            const sizes = visibility.map(v => v ? 10 : 0);
-                            Plotly.restyle(chartDiv, {{'marker.size': [sizes]}}, [1]);
-                        }}
-                    }}
+                    // Toggle table bodies
+                    document.getElementById('bestPicksAll').style.display = excludeQBs ? 'none' : '';
+                    document.getElementById('bestPicksNoQB').style.display = excludeQBs ? '' : 'none';
+                    document.getElementById('worstPicksAll').style.display = excludeQBs ? 'none' : '';
+                    document.getElementById('worstPicksNoQB').style.display = excludeQBs ? '' : 'none';
                 }}
             </script>
         </div>
@@ -1087,9 +1095,16 @@ def generate_draft_chart(draft):
     early_picks = [p for p in pick_analysis if p['pick'].pick_number <= 60]
     worst_5 = sorted(early_picks, key=lambda x: x['diff'])[:5]
 
-    # Generate chart with a fixed div ID for JavaScript filtering
-    chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn', div_id='draftChart')
-    return chart_html, best_5, worst_5
+    # Also calculate best/worst without QBs
+    non_qb_analysis = [p for p in pick_analysis if p['pick'].position != 'QB']
+    best_5_no_qb = sorted(non_qb_analysis, key=lambda x: x['diff'], reverse=True)[:5]
+
+    early_picks_no_qb = [p for p in non_qb_analysis if p['pick'].pick_number <= 60]
+    worst_5_no_qb = sorted(early_picks_no_qb, key=lambda x: x['diff'])[:5]
+
+    # Generate chart (no div_id needed, won't be filtered)
+    chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
+    return chart_html, best_5, worst_5, best_5_no_qb, worst_5_no_qb
 
 
 def generate_luck_chart(luck):

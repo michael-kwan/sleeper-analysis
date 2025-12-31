@@ -246,25 +246,11 @@
         function toggleQBs() {
             const excludeQBs = document.getElementById('excludeQBs').checked;
 
-            // Filter table rows
-            const rows = document.querySelectorAll('.draft-pick-row');
-            rows.forEach(row => {
-                const position = row.getAttribute('data-position');
-                if (position === 'QB') {
-                    row.style.display = excludeQBs ? 'none' : '';
-                }
-            });
-
-            // Filter Plotly chart
-            const chartDiv = document.getElementById('draftChart');
-            if (chartDiv && chartDiv.data) {
-                const scatterTrace = chartDiv.data[1];
-                if (scatterTrace && scatterTrace.customdata) {
-                    const visibility = scatterTrace.customdata.map(pos => pos !== 'QB' || !excludeQBs);
-                    const sizes = visibility.map(v => v ? 10 : 0);
-                    Plotly.restyle(chartDiv, {'marker.size': [sizes]}, [1]);
-                }
-            }
+            // Toggle table bodies
+            document.getElementById('bestPicksAll').style.display = excludeQBs ? 'none' : '';
+            document.getElementById('bestPicksNoQB').style.display = excludeQBs ? '' : 'none';
+            document.getElementById('worstPicksAll').style.display = excludeQBs ? 'none' : '';
+            document.getElementById('worstPicksNoQB').style.display = excludeQBs ? '' : 'none';
         }
 
         async function generateReport(leagueId) {
@@ -470,44 +456,78 @@
 
             // QB Toggle
             html += '<div class="toggle-container">';
-            html += '<label><input type="checkbox" id="excludeQBs" onchange="toggleQBs()"><span>Exclude QBs from chart and tables</span></label>';
+            html += '<label><input type="checkbox" id="excludeQBs" onchange="toggleQBs()"><span>Exclude QBs from tables</span></label>';
             html += '</div>';
 
             // Draft chart will be inserted here
             html += '<div id="draftChart" style="width: 100%; height: 500px; margin: 20px 0;"></div>';
 
-            // Best Picks
+            // Calculate best/worst picks without QBs
+            const bestPicksNoQB = draft.best_picks ? draft.best_picks.filter(p => p.position !== 'QB').slice(0, 5) : [];
+            const worstPicksNoQB = draft.worst_picks ? draft.worst_picks.filter(p => p.position !== 'QB').slice(0, 5) : [];
+
+            // Best Picks - All positions
             html += '<h3>Top 5 Best Picks (Most Above Expected)</h3><table>';
-            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead><tbody>';
+            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead>';
+            html += '<tbody id="bestPicksAll">';
             if (draft.best_picks) {
                 draft.best_picks.forEach(pick => {
-                    html += `<tr class="draft-pick-row" data-position="${pick.position}">
+                    html += `<tr>
                         <td>${pick.pick_number}</td>
                         <td>${pick.player_name} (${pick.position})</td>
                         <td>${pick.team_name}</td>
-                        <td>${pick.points_scored.toFixed(1)}</td>
+                        <td class="positive">${pick.points_scored.toFixed(1)}</td>
                         <td>${pick.expected_points.toFixed(1)}</td>
                         <td class="positive">+${pick.value_diff.toFixed(1)}</td>
                     </tr>`;
                 });
             }
+            html += '</tbody>';
+
+            // Best Picks - No QBs
+            html += '<tbody id="bestPicksNoQB" style="display: none;">';
+            bestPicksNoQB.forEach(pick => {
+                html += `<tr>
+                    <td>${pick.pick_number}</td>
+                    <td>${pick.player_name} (${pick.position})</td>
+                    <td>${pick.team_name}</td>
+                    <td class="positive">${pick.points_scored.toFixed(1)}</td>
+                    <td>${pick.expected_points.toFixed(1)}</td>
+                    <td class="positive">+${pick.value_diff.toFixed(1)}</td>
+                </tr>`;
+            });
             html += '</tbody></table>';
 
-            // Worst Picks
+            // Worst Picks - All positions
             html += '<h3>Top 5 Worst Picks (Most Below Expected)</h3><table>';
-            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead><tbody>';
+            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead>';
+            html += '<tbody id="worstPicksAll">';
             if (draft.worst_picks) {
                 draft.worst_picks.forEach(pick => {
-                    html += `<tr class="draft-pick-row" data-position="${pick.position}">
+                    html += `<tr>
                         <td>${pick.pick_number}</td>
                         <td>${pick.player_name} (${pick.position})</td>
                         <td>${pick.team_name}</td>
-                        <td>${pick.points_scored.toFixed(1)}</td>
+                        <td class="negative">${pick.points_scored.toFixed(1)}</td>
                         <td>${pick.expected_points.toFixed(1)}</td>
                         <td class="negative">${pick.value_diff.toFixed(1)}</td>
                     </tr>`;
                 });
             }
+            html += '</tbody>';
+
+            // Worst Picks - No QBs
+            html += '<tbody id="worstPicksNoQB" style="display: none;">';
+            worstPicksNoQB.forEach(pick => {
+                html += `<tr>
+                    <td>${pick.pick_number}</td>
+                    <td>${pick.player_name} (${pick.position})</td>
+                    <td>${pick.team_name}</td>
+                    <td class="negative">${pick.points_scored.toFixed(1)}</td>
+                    <td>${pick.expected_points.toFixed(1)}</td>
+                    <td class="negative">${pick.value_diff.toFixed(1)}</td>
+                </tr>`;
+            });
             html += '</tbody></table></div>';
 
             // Render draft chart
