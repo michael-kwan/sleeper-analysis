@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from sleeper_analytics import __version__
 from sleeper_analytics.api.dependencies import ClientManager
-from sleeper_analytics.api.routes import awards, benchwarmer, efficiency, faab, leagues, luck, matchups, trades, transactions, viz
+from sleeper_analytics.api.routes import awards, benchwarmer, efficiency, faab, leagues, luck, matchups, trade_analyzer, trades, transactions, viz
 from sleeper_analytics.config import get_settings
 
 
@@ -89,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(matchups.router, prefix="/api/matchups", tags=["Matchups"])
     app.include_router(efficiency.router, prefix="/api/efficiency", tags=["Efficiency"])
     app.include_router(trades.router, prefix="/api/trades", tags=["Trades"])
+    app.include_router(trade_analyzer.router, prefix="/api/trade-analyzer", tags=["Trade Analyzer"])
     app.include_router(awards.router, prefix="/api/awards", tags=["Awards"])
     app.include_router(benchwarmer.router, prefix="/api/benchwarmer", tags=["Benchwarmer"])
     app.include_router(luck.router, prefix="/api/luck", tags=["Luck Analysis"])
