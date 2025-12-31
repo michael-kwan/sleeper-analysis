@@ -544,6 +544,13 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
             <p><strong>Worst Drafter:</strong> <span class="lowlight">{draft.worst_drafter}</span> ({draft.worst_drafter_avg_ppick:.1f} pts/pick)</p>
             <p><strong>League Average:</strong> {draft.league_avg_points_per_pick:.1f} pts/pick</p>
 
+            <div style="margin-top: 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="excludeQBs" onchange="toggleQBs()" style="width: 18px; height: 18px; cursor: pointer;">
+                    <span style="color: #e2e8f0;">Exclude QBs from chart and tables</span>
+                </label>
+            </div>
+
             <div style="margin-top: 30px;">
                 {draft_chart}
             </div>
@@ -561,9 +568,9 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                         <th>Difference</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="bestPicksTable">
                     {''.join(f"""
-                    <tr>
+                    <tr class="draft-pick-row" data-position="{p['pick'].position}">
                         <td>{p['pick'].pick_number}</td>
                         <td><strong>{p['pick'].player_name}</strong></td>
                         <td>{p['pick'].team_name}</td>
@@ -589,9 +596,9 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                         <th>Difference</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="worstPicksTable">
                     {''.join(f"""
-                    <tr>
+                    <tr class="draft-pick-row" data-position="{p['pick'].position}">
                         <td>{p['pick'].pick_number}</td>
                         <td><strong>{p['pick'].player_name}</strong></td>
                         <td>{p['pick'].team_name}</td>
@@ -603,6 +610,36 @@ def generate_html(ctx, standings, awards, benchwarmers, luck, faab, roster_const
                     """ for p in worst_picks)}
                 </tbody>
             </table>
+
+            <script>
+                function toggleQBs() {{
+                    const excludeQBs = document.getElementById('excludeQBs').checked;
+
+                    // Filter table rows
+                    const rows = document.querySelectorAll('.draft-pick-row');
+                    rows.forEach(row => {{
+                        const position = row.getAttribute('data-position');
+                        if (position === 'QB') {{
+                            row.style.display = excludeQBs ? 'none' : '';
+                        }}
+                    }});
+
+                    // Filter Plotly chart
+                    const chartDiv = document.getElementById('draftChart');
+                    if (chartDiv && chartDiv.data) {{
+                        // Find the scatter trace (index 1, index 0 is the trend line)
+                        const scatterTrace = chartDiv.data[1];
+                        if (scatterTrace && scatterTrace.customdata) {{
+                            // Create visibility array based on positions
+                            const visibility = scatterTrace.customdata.map(pos => pos !== 'QB' || !excludeQBs);
+
+                            // Update marker sizes: 0 to hide, 10 to show
+                            const sizes = visibility.map(v => v ? 10 : 0);
+                            Plotly.restyle(chartDiv, {{'marker.size': [sizes]}}, [1]);
+                        }}
+                    }}
+                }}
+            </script>
         </div>
 
         <!-- Transaction Activity -->
@@ -998,14 +1035,17 @@ def generate_draft_chart(draft):
         ))
 
     # Add actual picks as scatter points
+    # Store positions in customdata for filtering
+    positions = [all_picks[i].position for i in range(len(all_picks))]
     fig.add_trace(go.Scatter(
         x=pick_numbers,
         y=actual_points,
         mode='markers',
         name='Actual Points',
         marker=dict(size=10, color=colors, line=dict(color='#ffffff', width=1)),
-        text=[f"{name}<br>{team}<br>{rating}" for name, team, rating in zip(player_names, teams, value_ratings)],
-        hovertemplate='<b>Pick %{x}</b><br>%{text}<br>Points: %{y:.1f}<extra></extra>'
+        text=[f"{name}<br>{team}<br>{pos}<br>{rating}" for name, team, pos, rating in zip(player_names, teams, positions, value_ratings)],
+        hovertemplate='<b>Pick %{x}</b><br>%{text}<br>Points: %{y:.1f}<extra></extra>',
+        customdata=positions  # Store positions for filtering
     ))
 
     fig.update_layout(
@@ -1047,7 +1087,9 @@ def generate_draft_chart(draft):
     early_picks = [p for p in pick_analysis if p['pick'].pick_number <= 60]
     worst_5 = sorted(early_picks, key=lambda x: x['diff'])[:5]
 
-    return fig.to_html(full_html=False, include_plotlyjs='cdn'), best_5, worst_5
+    # Generate chart with a fixed div ID for JavaScript filtering
+    chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn', div_id='draftChart')
+    return chart_html, best_5, worst_5
 
 
 def generate_luck_chart(luck):
