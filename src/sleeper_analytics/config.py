@@ -4,6 +4,7 @@ Configuration module using pydantic-settings.
 Loads settings from environment variables with sensible defaults.
 """
 
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,8 +38,8 @@ class Settings(BaseSettings):
 
     # Server Configuration
     host: str = "0.0.0.0"
-    port: int = 8000
-    reload: bool = True
+    port: int = int(os.getenv("PORT", "8000"))  # Railway uses PORT env var
+    reload: bool = False  # Disable reload in production
 
 
 @lru_cache
