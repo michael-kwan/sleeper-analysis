@@ -326,15 +326,15 @@
 
                 // Luck Analysis
                 html += '<div class="section"><h2>🍀 Luck Analysis</h2><table>';
-                html += '<thead><tr><th>Team</th><th>Record</th><th>Expected W-L</th><th>Luck Score</th><th>SOS</th></tr></thead><tbody>';
+                html += '<thead><tr><th>Team</th><th>Record</th><th>Expected Record</th><th>Luck Score</th><th>SOS</th></tr></thead><tbody>';
                 luck.team_reports.forEach(team => {
                     const luckClass = team.luck_score > 0 ? 'positive' : 'negative';
                     html += `<tr>`;
                     html += `<td>${team.team_name}</td>`;
-                    html += `<td>${team.wins}-${team.losses}</td>`;
-                    html += `<td>${team.expected_wins.toFixed(1)}-${team.expected_losses.toFixed(1)}</td>`;
+                    html += `<td>${team.actual_record}</td>`;
+                    html += `<td>${team.expected_record}</td>`;
                     html += `<td class="${luckClass}">${team.luck_score > 0 ? '+' : ''}${team.luck_score.toFixed(1)}</td>`;
-                    html += `<td>${team.strength_of_schedule.avg_opponent_score.toFixed(1)}</td>`;
+                    html += `<td>${team.strength_of_schedule.avg_opponent_points.toFixed(1)}</td>`;
                     html += `</tr>`;
                 });
                 html += '</tbody></table></div>';
@@ -489,7 +489,7 @@
         function renderLuckScatterChart(luck) {
             const teams = luck.team_reports.map(t => t.team_name);
             const luckScores = luck.team_reports.map(t => t.luck_score);
-            const wins = luck.team_reports.map(t => t.wins);
+            const wins = luck.team_reports.map(t => t.actual_wins);
 
             const trace = {
                 x: luckScores,
