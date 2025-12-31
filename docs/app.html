@@ -136,6 +136,15 @@
         .highlight {
             background: rgba(102, 126, 234, 0.1);
             font-weight: bold;
+            color: #10b981;
+        }
+
+        .lowlight {
+            color: #f87171;
+        }
+
+        .emoji {
+            margin-right: 10px;
         }
 
         .error {
@@ -395,6 +404,9 @@
                 try { if (trades) html += buildTradesSection(trades); }
                 catch (error) { errors.push({ section: 'Trades Rendering', error: error.message }); }
 
+                try { if (trades) html += buildTransactionActivitySection(trades); }
+                catch (error) { errors.push({ section: 'Transaction Activity Rendering', error: error.message }); }
+
                 // Add debug section if there were any errors
                 if (errors.length > 0) {
                     html += buildDebugSection(errors);
@@ -433,43 +445,37 @@
         }
 
         function buildAwardsSection(awards) {
-            let html = '<div class="section"><h2>🎖️ Weekly Awards (High/Low Scorers)</h2>';
+            let html = '<div class="section"><h2><span class="emoji">🎖️</span>Weekly Awards</h2>';
             html += '<p style="margin-bottom: 15px; color: #94a3b8;">$5/week payout for high scorer, $5/week penalty for low scorer</p>';
             html += '<table><thead><tr><th>Week</th><th>High Scorer</th><th>Score</th><th>Low Scorer</th><th>Score</th></tr></thead><tbody>';
             awards.weekly_awards.forEach(week => {
                 html += `<tr>
                     <td>${week.week}</td>
                     <td>${week.high_scorer}</td>
-                    <td class="positive">${week.high_score.toFixed(2)}</td>
+                    <td class="highlight">${week.high_score.toFixed(2)}</td>
                     <td>${week.low_scorer}</td>
-                    <td class="negative">${week.low_score.toFixed(2)}</td>
+                    <td class="lowlight">${week.low_score.toFixed(2)}</td>
                 </tr>`;
             });
             html += '</tbody></table>';
 
-            // Convert API response dicts to payout summary array
-            const payoutSummary = [];
-            for (const [teamName, netPayout] of Object.entries(awards.payout_by_team)) {
-                payoutSummary.push({
-                    team_name: teamName,
-                    high_scorer_count: awards.high_score_leaders[teamName] || 0,
-                    low_scorer_count: awards.low_score_leaders[teamName] || 0,
-                    net_payout: netPayout
-                });
-            }
-            // Sort by net payout descending
-            payoutSummary.sort((a, b) => b.net_payout - a.net_payout);
+            // Get all teams (sorted)
+            const allTeams = new Set([...Object.keys(awards.high_score_leaders), ...Object.keys(awards.low_score_leaders)]);
+            const sortedTeams = Array.from(allTeams).sort();
 
             // Payout summary
-            html += '<h3>Season Payout Summary</h3><table>';
+            html += '<h3 style="margin-top: 30px;">Season Payout Summary</h3><table>';
             html += '<thead><tr><th>Team</th><th>High Scorer Count</th><th>Low Scorer Count</th><th>Net Payout</th></tr></thead><tbody>';
-            payoutSummary.forEach(team => {
-                const netClass = team.net_payout > 0 ? 'positive' : (team.net_payout < 0 ? 'negative' : '');
+            sortedTeams.forEach(team => {
+                const highCount = awards.high_score_leaders[team] || 0;
+                const lowCount = awards.low_score_leaders[team] || 0;
+                const netPayout = awards.payout_by_team[team] || 0;
+                const netClass = netPayout > 0 ? 'highlight' : (netPayout < 0 ? 'lowlight' : '');
                 html += `<tr>
-                    <td>${team.team_name}</td>
-                    <td class="positive">${team.high_scorer_count}</td>
-                    <td class="negative">${team.low_scorer_count}</td>
-                    <td class="${netClass}">${team.net_payout > 0 ? '+' : ''}$${team.net_payout}</td>
+                    <td><strong>${team}</strong></td>
+                    <td class="highlight">${highCount}</td>
+                    <td class="lowlight">${lowCount}</td>
+                    <td class="${netClass}">$${netPayout}</td>
                 </tr>`;
             });
             html += '</tbody></table></div>';
@@ -477,17 +483,24 @@
         }
 
         function buildBenchwarmerSection(benchwarmers) {
-            let html = '<div class="section"><h2>💺 Benchwarmer Analysis</h2>';
-            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Total points scored by players while on the bench (points left on the table each week)</p>';
-            html += '<table><thead><tr><th>Rank</th><th>Team</th><th>Total Bench Points</th><th>Avg/Week</th><th>Worst Benching</th></tr></thead><tbody>';
-            benchwarmers.all_teams.forEach((team, idx) => {
+            let html = '<div class="section"><h2><span class="emoji">💺</span>Benchwarmer Analysis</h2>';
+            html += `<p><strong>Champion:</strong> <span class="highlight">${benchwarmers.benchwarmer_champion}</span> (${benchwarmers.benchwarmer_champion_points.toFixed(2)} total unoptimized points)</p>`;
+            html += '<p style="color: #94a3b8; font-size: 0.9em; margin-top: 10px;">';
+            html += '<em>Note: "Total unoptimized points" = sum of all points left on bench when a better player could have started. This measures lineup optimization mistakes, not just bench production.</em>';
+            html += '</p>';
+
+            // Sort by total bench points descending
+            const sortedTeams = [...benchwarmers.all_teams].sort((a, b) => b.total_bench_points - a.total_bench_points);
+
+            html += '<table><thead><tr><th>Rank</th><th>Team</th><th>Total Unoptimized Points</th><th>Avg/Week</th><th>Worst Benching</th></tr></thead><tbody>';
+            sortedTeams.forEach((team, idx) => {
                 const worstDecision = team.worst_benching_decision;
                 html += `<tr>
                     <td>${idx + 1}</td>
-                    <td>${team.team_name}</td>
-                    <td class="negative">${team.total_bench_points.toFixed(1)}</td>
-                    <td class="negative">${team.avg_bench_points_per_week.toFixed(1)}</td>
-                    <td class="negative">${worstDecision ? `${worstDecision.player_name} (${worstDecision.points.toFixed(1)} pts, Wk ${worstDecision.week})` : '-'}</td>
+                    <td><strong>${team.team_name}</strong></td>
+                    <td class="lowlight">${team.total_bench_points.toFixed(2)}</td>
+                    <td>${team.avg_bench_points_per_week.toFixed(2)}</td>
+                    <td>${worstDecision ? `${worstDecision.player_name} - Week ${worstDecision.week} (${worstDecision.points.toFixed(2)} pts)` : 'N/A'}</td>
                 </tr>`;
             });
             html += '</tbody></table></div>';
@@ -495,78 +508,76 @@
         }
 
         function buildLuckSection(luck) {
-            let html = '<div class="section"><h2>🍀 Luck Analysis</h2>';
-            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Compares actual record vs expected record based on weekly performance. Positive luck = won more than expected.</p>';
-            html += '<table><thead><tr><th>Team</th><th>Actual Record</th><th>Expected Record</th><th>Luck Score</th><th>SOS (Avg Opponent PF)</th></tr></thead><tbody>';
+            let html = '<div class="section"><h2><span class="emoji">🍀</span>Luck Analysis</h2>';
+            html += `<p><strong>Luckiest:</strong> <span class="highlight">${luck.luckiest_team}</span> (+${luck.luckiest_score} wins)</p>`;
+            html += `<p><strong>Unluckiest:</strong> <span class="lowlight">${luck.unluckiest_team}</span> (${luck.unluckiest_score} wins)</p>`;
+            html += '<table><thead><tr><th>Team</th><th>Actual Record</th><th>Expected Record</th><th>Luck Score</th><th>Lucky Wins</th><th>Unlucky Losses</th></tr></thead><tbody>';
 
-            // Sort by actual wins descending
-            const sortedTeams = [...luck.team_reports].sort((a, b) => b.actual_wins - a.actual_wins);
+            // Sort by luck score descending
+            const sortedTeams = [...luck.team_reports].sort((a, b) => b.luck_score - a.luck_score);
 
             sortedTeams.forEach(team => {
-                const luckClass = team.luck_score > 0 ? 'positive' : 'negative';
+                const luckClass = team.luck_score > 0 ? 'highlight' : team.luck_score < 0 ? 'lowlight' : '';
                 html += `<tr>
-                    <td>${team.team_name}</td>
+                    <td><strong>${team.team_name}</strong></td>
                     <td>${team.actual_record}</td>
                     <td>${team.expected_record}</td>
                     <td class="${luckClass}">${team.luck_score > 0 ? '+' : ''}${team.luck_score.toFixed(1)}</td>
-                    <td>${team.strength_of_schedule.avg_opponent_points.toFixed(1)}</td>
+                    <td>${team.lucky_wins.length}</td>
+                    <td>${team.unlucky_losses.length}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+
+            // Luck chart placeholder (would be rendered separately if available)
+            html += '<div id="luckChart" style="width: 100%; height: 400px; margin-top: 30px;"></div>';
+
+            html += '</div>';
+            return html;
+        }
+
+        function buildFAABSection(faab) {
+            let html = '<div class="section"><h2><span class="emoji">💰</span>FAAB Efficiency</h2>';
+            html += '<table>';
+            html += '<thead><tr><th>Rank</th><th>Team</th><th>FAAB Spent</th><th>FAAB Remaining</th><th>Points Gained</th><th>Avg ROI</th><th>Best Pickup</th></tr></thead><tbody>';
+            faab.owner_rankings.forEach(owner => {
+                const bestPickup = owner.best_pickup ?
+                    `${owner.best_pickup.player_name} (${owner.best_pickup.points_during_ownership.toFixed(0)} pts)` :
+                    'N/A';
+                html += `<tr>
+                    <td>${owner.faab_efficiency_rank}</td>
+                    <td><strong>${owner.owner_name}</strong></td>
+                    <td>$${owner.total_faab_spent}</td>
+                    <td>$${owner.faab_remaining}</td>
+                    <td>${owner.total_points_from_faab.toFixed(0)}</td>
+                    <td class="highlight">${owner.avg_roi.toFixed(2)}</td>
+                    <td>${bestPickup}</td>
                 </tr>`;
             });
             html += '</tbody></table></div>';
             return html;
         }
 
-        function buildFAABSection(faab) {
-            let html = '<div class="section"><h2>💰 FAAB Analysis</h2>';
-            html += '<p style="margin-bottom: 15px; color: #94a3b8;">FAAB efficiency measured by ROI (points scored per dollar spent). Only counts points when player was in starting lineup.</p>';
-
-            html += '<h3>Team FAAB Rankings</h3><table>';
-            html += '<thead><tr><th>Rank</th><th>Team</th><th>Spent</th><th>Remaining</th><th>Total Points</th><th>Avg ROI</th></tr></thead><tbody>';
-            faab.owner_rankings.forEach(owner => {
-                html += `<tr>
-                    <td>${owner.faab_efficiency_rank}</td>
-                    <td>${owner.owner_name}</td>
-                    <td>$${owner.total_faab_spent}</td>
-                    <td>$${owner.faab_remaining}</td>
-                    <td>${owner.total_points_from_faab.toFixed(1)}</td>
-                    <td>${owner.avg_roi.toFixed(2)}</td>
-                </tr>`;
-            });
-            html += '</tbody></table>';
-
-            // Best pickups
-            if (faab.best_value_pickups && faab.best_value_pickups.length > 0) {
-                html += '<h3>Best Value FAAB Pickups</h3><table>';
-                html += '<thead><tr><th>Player</th><th>Owner</th><th>FAAB</th><th>Points (Started)</th><th>ROI</th></tr></thead><tbody>';
-                faab.best_value_pickups.slice(0, 10).forEach(pickup => {
-                    html += `<tr>
-                        <td>${pickup.player_name} (${pickup.position})</td>
-                        <td>${pickup.owner_name}</td>
-                        <td>$${pickup.faab_spent}</td>
-                        <td>${pickup.points_during_ownership.toFixed(1)}</td>
-                        <td class="positive">${pickup.roi.toFixed(2)}</td>
-                    </tr>`;
-                });
-                html += '</tbody></table>';
-            }
-
-            html += '</div>';
-            return html;
-        }
-
         function buildRosterConstructionSection(rosterConstruction) {
-            let html = '<div class="section"><h2>🏗️ Roster Construction</h2>';
-            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Shows where each team\'s points came from: Draft, Trades, Waivers, or Free Agency. Only counts points when players were in starting lineup during ownership period.</p>';
+            let html = '<div class="section"><h2><span class="emoji">📊</span>Roster Construction</h2>';
+            html += `<p><strong>Best Drafter:</strong> <span class="highlight">${rosterConstruction.best_drafter}</span> (${rosterConstruction.best_drafter_pct}% from draft)</p>`;
+            html += `<p><strong>Most Active Trader:</strong> <span class="highlight">${rosterConstruction.most_active_trader}</span> (${rosterConstruction.most_active_trader_count} trades)</p>`;
+            html += `<p><strong>Waiver Wire King:</strong> <span class="highlight">${rosterConstruction.waiver_wire_king}</span> (${rosterConstruction.waiver_wire_king_points.toFixed(0)} pts from waivers)</p>`;
 
-            html += '<table><thead><tr><th>Team</th><th>Draft %</th><th>Trade %</th><th>Waiver %</th><th>FA %</th><th>Primary Source</th></tr></thead><tbody>';
-            rosterConstruction.all_teams.forEach(team => {
+            // Roster construction chart placeholder
+            html += '<div id="rosterConstructionChart" style="width: 100%; height: 400px; margin-top: 30px;"></div>';
+
+            html += '<table style="margin-top: 30px;"><thead><tr><th>Team</th><th>Draft %</th><th>Trade %</th><th>Waiver %</th><th>FA %</th><th>Primary Source</th></tr></thead><tbody>';
+            // Sort by draft percentage descending
+            const sortedTeams = [...rosterConstruction.all_teams].sort((a, b) => b.breakdown.draft_percentage - a.breakdown.draft_percentage);
+            sortedTeams.forEach(team => {
                 html += `<tr>
-                    <td>${team.team_name}</td>
-                    <td>${team.breakdown.draft_percentage.toFixed(1)}%</td>
-                    <td>${team.breakdown.trade_percentage.toFixed(1)}%</td>
-                    <td>${team.breakdown.waiver_percentage.toFixed(1)}%</td>
-                    <td>${team.breakdown.free_agent_percentage.toFixed(1)}%</td>
-                    <td class="highlight">${team.primary_source}</td>
+                    <td><strong>${team.team_name}</strong></td>
+                    <td>${team.breakdown.draft_percentage}%</td>
+                    <td>${team.breakdown.trade_percentage}%</td>
+                    <td>${team.breakdown.waiver_percentage}%</td>
+                    <td>${team.breakdown.free_agent_percentage}%</td>
+                    <td class="highlight">${team.primary_source.charAt(0).toUpperCase() + team.primary_source.slice(1)}</td>
                 </tr>`;
             });
             html += '</tbody></table></div>';
@@ -574,8 +585,10 @@
         }
 
         function buildDraftSection(draft) {
-            let html = '<div class="section"><h2>🎯 Draft Analysis</h2>';
-            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Analyzes draft performance vs expected value. Best picks exceeded expectations, worst picks underperformed.</p>';
+            let html = '<div class="section"><h2><span class="emoji">🎓</span>Draft Analysis</h2>';
+            html += `<p><strong>Best Drafter:</strong> <span class="highlight">${draft.best_drafter}</span> (${draft.best_drafter_avg_ppick.toFixed(1)} pts/pick)</p>`;
+            html += `<p><strong>Worst Drafter:</strong> <span class="lowlight">${draft.worst_drafter}</span> (${draft.worst_drafter_avg_ppick.toFixed(1)} pts/pick)</p>`;
+            html += `<p><strong>League Average:</strong> ${draft.league_avg_points_per_pick.toFixed(1)} pts/pick</p>`;
 
             // Calculate expected points and best/worst picks
             // Collect all picks
@@ -607,25 +620,28 @@
             const worstPicksNoQB = earlyNonQBPicks.sort((a, b) => a.value_diff - b.value_diff).slice(0, 5);
 
             // QB Toggle
-            html += '<div class="toggle-container">';
-            html += '<label><input type="checkbox" id="excludeQBs" onchange="toggleQBs()"><span>Exclude QBs from tables</span></label>';
-            html += '</div>';
+            html += '<div style="margin-top: 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">';
+            html += '<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">';
+            html += '<input type="checkbox" id="excludeQBs" onchange="toggleQBs()" style="width: 18px; height: 18px; cursor: pointer;">';
+            html += '<span style="color: #e2e8f0;">Exclude QBs from tables</span>';
+            html += '</label></div>';
 
             // Draft chart will be inserted here
-            html += '<div id="draftChart" style="width: 100%; height: 500px; margin: 20px 0;"></div>';
+            html += '<div id="draftChart" style="width: 100%; height: 500px; margin-top: 30px;"></div>';
 
             // Best Picks - All positions
-            html += '<h3>Top 5 Best Picks (Most Above Expected)</h3><table>';
-            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead>';
+            html += '<h3 style="margin-top: 40px; color: #10b981;">Top 5 Best Picks (Most Above Expected)</h3><table>';
+            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Position</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead>';
             html += '<tbody id="bestPicksAll">';
             bestPicks.forEach(pick => {
                 html += `<tr>
                     <td>${pick.pick_number}</td>
-                    <td>${pick.player_name} (${pick.position})</td>
+                    <td><strong>${pick.player_name}</strong></td>
                     <td>${pick.team_name}</td>
-                    <td class="positive">${pick.points_scored.toFixed(1)}</td>
+                    <td>${pick.position}</td>
+                    <td class="highlight">${pick.points_scored.toFixed(1)}</td>
                     <td>${pick.expected_points.toFixed(1)}</td>
-                    <td class="positive">+${pick.value_diff.toFixed(1)}</td>
+                    <td class="highlight">+${pick.value_diff.toFixed(1)}</td>
                 </tr>`;
             });
             html += '</tbody>';
@@ -635,27 +651,29 @@
             bestPicksNoQB.forEach(pick => {
                 html += `<tr>
                     <td>${pick.pick_number}</td>
-                    <td>${pick.player_name} (${pick.position})</td>
+                    <td><strong>${pick.player_name}</strong></td>
                     <td>${pick.team_name}</td>
-                    <td class="positive">${pick.points_scored.toFixed(1)}</td>
+                    <td>${pick.position}</td>
+                    <td class="highlight">${pick.points_scored.toFixed(1)}</td>
                     <td>${pick.expected_points.toFixed(1)}</td>
-                    <td class="positive">+${pick.value_diff.toFixed(1)}</td>
+                    <td class="highlight">+${pick.value_diff.toFixed(1)}</td>
                 </tr>`;
             });
             html += '</tbody></table>';
 
             // Worst Picks - All positions
-            html += '<h3>Top 5 Worst Picks (Most Below Expected)</h3><table>';
-            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead>';
+            html += '<h3 style="margin-top: 40px; color: #f87171;">Top 5 Worst Picks (Most Below Expected)</h3><table>';
+            html += '<thead><tr><th>Pick #</th><th>Player</th><th>Team</th><th>Position</th><th>Actual Points</th><th>Expected Points</th><th>Difference</th></tr></thead>';
             html += '<tbody id="worstPicksAll">';
             worstPicks.forEach(pick => {
                 html += `<tr>
                     <td>${pick.pick_number}</td>
-                    <td>${pick.player_name} (${pick.position})</td>
+                    <td><strong>${pick.player_name}</strong></td>
                     <td>${pick.team_name}</td>
-                    <td class="negative">${pick.points_scored.toFixed(1)}</td>
+                    <td>${pick.position}</td>
+                    <td class="lowlight">${pick.points_scored.toFixed(1)}</td>
                     <td>${pick.expected_points.toFixed(1)}</td>
-                    <td class="negative">${pick.value_diff.toFixed(1)}</td>
+                    <td class="lowlight">${pick.value_diff.toFixed(1)}</td>
                 </tr>`;
             });
             html += '</tbody>';
@@ -665,11 +683,12 @@
             worstPicksNoQB.forEach(pick => {
                 html += `<tr>
                     <td>${pick.pick_number}</td>
-                    <td>${pick.player_name} (${pick.position})</td>
+                    <td><strong>${pick.player_name}</strong></td>
                     <td>${pick.team_name}</td>
-                    <td class="negative">${pick.points_scored.toFixed(1)}</td>
+                    <td>${pick.position}</td>
+                    <td class="lowlight">${pick.points_scored.toFixed(1)}</td>
                     <td>${pick.expected_points.toFixed(1)}</td>
-                    <td class="negative">${pick.value_diff.toFixed(1)}</td>
+                    <td class="lowlight">${pick.value_diff.toFixed(1)}</td>
                 </tr>`;
             });
             html += '</tbody></table></div>';
@@ -750,53 +769,64 @@
         }
 
         function buildTradesSection(trades) {
-            let html = '<div class="section"><h2>🤝 Trade Analysis</h2>';
-            html += '<p style="margin-bottom: 15px; color: #94a3b8;">Analyzes trade outcomes based on points scored after the trade.</p>';
-
-            if (trades.most_lopsided_trades && trades.most_lopsided_trades.length > 0) {
-                html += '<h3>Most Lopsided Trades</h3><table>';
-                html += '<thead><tr><th>Week</th><th>Winner (Players Received)</th><th>Loser (Players Received)</th><th>Point Differential</th></tr></thead><tbody>';
-                trades.most_lopsided_trades.slice(0, 10).forEach(trade => {
-                    const winnerPlayers = trade.winner === trade.team_a ? trade.team_a_players : trade.team_b_players;
-                    const loserPlayers = trade.winner === trade.team_a ? trade.team_b_players : trade.team_a_players;
-
-                    html += `<tr>
-                        <td>${trade.week}</td>
-                        <td>
-                            <strong>${trade.winner}</strong><br>
-                            <span style="color: #94a3b8; font-size: 0.85em;">
-                                ${winnerPlayers.map(p => `${p.player_name} (${p.position}): ${p.points_after_trade.toFixed(1)} pts`).join('<br>')}
-                            </span>
-                        </td>
-                        <td>
-                            <strong>${trade.loser}</strong><br>
-                            <span style="color: #94a3b8; font-size: 0.85em;">
-                                ${loserPlayers.map(p => `${p.player_name} (${p.position}): ${p.points_after_trade.toFixed(1)} pts`).join('<br>')}
-                            </span>
-                        </td>
-                        <td class="highlight positive">+${trade.point_differential.toFixed(1)}</td>
-                    </tr>`;
-                });
-                html += '</tbody></table>';
+            if (!trades || trades.total_trades === 0) {
+                return '';
             }
 
-            // Transaction Activity
-            html += '<h3>Transaction Activity Breakdown</h3>';
-            html += '<p style="margin-bottom: 10px; color: #94a3b8;">Shows total moves by type: Trades, Waivers, and Free Agent pickups</p>';
-            html += '<table><thead><tr><th>Team</th><th>Trades</th><th>Waivers</th><th>Free Agents</th><th>Total Moves</th></tr></thead><tbody>';
+            let html = '<div class="section"><h2><span class="emoji">🤝</span>Trade Analysis</h2>';
+            html += `<p><strong>Best Trader:</strong> <span class="highlight">${trades.best_overall_trader}</span> (Net: +${trades.best_overall_trader_net_points.toFixed(1)} pts)</p>`;
+            html += `<p><strong>Worst Trader:</strong> <span class="lowlight">${trades.worst_overall_trader}</span> (Net: ${trades.worst_overall_trader_net_points.toFixed(1)} pts)</p>`;
+            html += `<p><strong>Biggest Trade Winner:</strong> ${trades.biggest_trade_winner} (+${trades.biggest_trade_winner_differential.toFixed(1)} pts)</p>`;
+            html += `<p><strong>Biggest Trade Loser:</strong> ${trades.biggest_trade_loser} (-${trades.biggest_trade_loser_differential.toFixed(1)} pts)</p>`;
 
-            if (trades.transaction_activity) {
-                const sortedActivity = [...trades.transaction_activity].sort((a, b) => b.total_moves - a.total_moves);
-                sortedActivity.forEach(team => {
-                    html += `<tr>
-                        <td>${team.team_name}</td>
-                        <td>${team.trade_count}</td>
-                        <td>${team.waiver_count}</td>
-                        <td>${team.free_agent_count}</td>
-                        <td class="highlight">${team.total_moves}</td>
-                    </tr>`;
-                });
+            html += '<table style="margin-top: 30px;">';
+            html += '<thead><tr><th>Week</th><th>Winner (Players Received)</th><th>Loser (Players Received)</th><th>Point Differential</th></tr></thead><tbody>';
+            trades.most_lopsided_trades.slice(0, 10).forEach(trade => {
+                const winnerPlayers = trade.winner === trade.team_a ? trade.team_a_players : trade.team_b_players;
+                const loserPlayers = trade.winner === trade.team_a ? trade.team_b_players : trade.team_a_players;
+
+                html += `<tr>
+                    <td>${trade.week}</td>
+                    <td>
+                        <strong>${trade.winner}</strong><br>
+                        <span style="color: #94a3b8; font-size: 0.85em;">
+                            ${winnerPlayers.map(p => `${p.player_name} (${p.position}): ${p.points_after_trade.toFixed(1)} pts`).join('<br>')}
+                        </span>
+                    </td>
+                    <td>
+                        <strong>${trade.loser}</strong><br>
+                        <span style="color: #94a3b8; font-size: 0.85em;">
+                            ${loserPlayers.map(p => `${p.player_name} (${p.position}): ${p.points_after_trade.toFixed(1)} pts`).join('<br>')}
+                        </span>
+                    </td>
+                    <td class="highlight">+${trade.point_differential.toFixed(1)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+
+            return html;
+        }
+
+        function buildTransactionActivitySection(trades) {
+            if (!trades || !trades.transaction_activity) {
+                return '';
             }
+
+            let html = '<div class="section"><h2><span class="emoji">📋</span>Transaction Activity</h2>';
+            html += '<p style="color: #94a3b8; margin-bottom: 20px;">Who made the most moves?</p>';
+            html += '<table><thead><tr><th>Rank</th><th>Team</th><th>Total Moves</th><th>Trades</th><th>Waivers</th><th>Free Agents</th></tr></thead><tbody>';
+
+            const sortedActivity = [...trades.transaction_activity].sort((a, b) => b.total_moves - a.total_moves);
+            sortedActivity.forEach((team, idx) => {
+                html += `<tr>
+                    <td>${idx + 1}</td>
+                    <td><strong>${team.team_name}</strong></td>
+                    <td class="highlight">${team.total_moves}</td>
+                    <td>${team.trade_count}</td>
+                    <td>${team.waiver_count}</td>
+                    <td>${team.free_agent_count}</td>
+                </tr>`;
+            });
             html += '</tbody></table></div>';
 
             return html;
